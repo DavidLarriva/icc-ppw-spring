@@ -1,31 +1,30 @@
-# Práctica 01 - Configuración de Spring Boot
+# Prácticas Spring Boot - fundamentos01
 
-Primera práctica de Spring Boot de la materia de Programación y Plataformas Web. Aquí
-dejo el entorno listo, levanto el servidor y armo los primeros endpoints REST: uno de
-estado y otros para un pequeño dominio de estudiantes.
+Proyecto de la materia Programación y Plataformas Web (UPS). Sobre el mismo proyecto voy
+agregando cada práctica.
 
 ## Datos del proyecto
 
 - Group: `ec.edu.ups.icc`
 - Artifact: `fundamentos01`
-- Package: `ec.edu.ups.icc.fundamentos01`
 - Java 25, Gradle (Groovy), Spring Boot 4.1.0
-- Dependencias: Spring Web (starter `spring-boot-starter-webmvc`) y Spring Boot DevTools
+- Dependencias: Spring Web (`spring-boot-starter-webmvc`) y Spring Boot DevTools
 
 ## Cómo correrlo
-
-Desde la carpeta del proyecto:
 
 ```bash
 ./gradlew bootRun
 ```
 
-El servidor arranca con un Tomcat embebido en el puerto 8080. En `application.yml` dejé
-configurada una ruta base `/api`, así que todos los endpoints cuelgan de ahí.
+Arranca un Tomcat embebido en el puerto 8080. En `application.yml` dejé una ruta base
+`/api`, así que todos los endpoints cuelgan de ahí.
 
-## Endpoints
+---
 
-Estado del servicio:
+# Práctica 01 - Configuración
+
+Dejar el entorno listo (Java + Gradle + Spring Boot) y levantar un primer endpoint de
+estado.
 
 ```
 GET http://localhost:8080/api/api/status
@@ -39,10 +38,19 @@ GET http://localhost:8080/api/api/status
 }
 ```
 
-Lista de estudiantes:
+> Nota: la ruta queda con `/api` doble porque al `context-path: /api` se le suma el
+> `@GetMapping("/api/status")` del controlador.
+
+---
+
+# Práctica 02 - Estructura del proyecto
+
+Organizar el código en paquetes por dominio. Agregué un módulo `students` con su
+controlador y su modelo en carpetas separadas.
 
 ```
-GET http://localhost:8080/api/students
+GET http://localhost:8080/api/students          -> lista de estudiantes
+GET http://localhost:8080/api/students/count     -> cantidad de estudiantes
 ```
 
 ```json
@@ -52,43 +60,74 @@ GET http://localhost:8080/api/students
 ]
 ```
 
-Cantidad de estudiantes:
+---
+
+# Práctica 03 - API REST
+
+CRUD REST completo, en memoria (sin servicios ni base de datos todavía), usando DTOs,
+modelo y un mapper. Lo hice para `users` y lo repliqué para `products`.
+
+## Endpoints
+
+Mismos 6 métodos para cada recurso (`/users` y `/products`):
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/users` | Lista todos |
+| GET | `/api/users/{id}` | Uno por id |
+| POST | `/api/users` | Crea (id autogenerado) |
+| PUT | `/api/users/{id}` | Reemplaza todo |
+| PATCH | `/api/users/{id}` | Actualiza solo lo que llega |
+| DELETE | `/api/users/{id}` | Elimina |
+
+Para productos es igual cambiando `/users` por `/products`.
+
+## Ejemplos
+
+Crear un usuario:
 
 ```
-GET http://localhost:8080/api/students/count
+POST /api/users
+{ "name": "Ana", "email": "ana@ups.edu.ec", "password": "1234" }
 ```
 
-```
-Total Estudiantes: 2
-```
-
-## Estructura
-
-```
-src/main/java/ec/edu/ups/icc/fundamentos01/
-├── Fundamentos01Application.java     Punto de entrada
-├── StatusController.java             Endpoint de estado
-└── students/
-    ├── controllers/
-    │   └── StudentController.java    Endpoints de estudiantes
-    └── models/
-        └── Student.java              Modelo de estudiante
+```json
+{ "id": 1, "name": "Ana", "email": "ana@ups.edu.ec" }
 ```
 
-La configuración va en `src/main/resources/application.yml`.
+La respuesta nunca devuelve `password` ni `passwordHash`. Si el id no existe, responde
+`404` con un mensaje:
+
+```json
+{ "message": "Usuario no encontrado con id 99" }
+```
+
+Un producto tiene `id`, `name`, `price`, `stock`:
+
+```json
+{ "id": 1, "name": "Teclado", "price": 25.5, "stock": 10 }
+```
+
+## Estructura (por recurso)
+
+```
+users/
+├── controllers/UserController.java   Los 6 endpoints
+├── dtos/                             CreateUserDto, UpdateUserDto, PartialUpdateUserDto, UserResponseDto
+├── models/UserModel.java             Datos internos del usuario
+└── mappers/UserMapper.java           DTO <-> modelo (genera passwordHash y createdAt)
+```
+
+`products/` tiene la misma estructura.
 
 ## Lo que entendí
 
-Separé la lógica de estudiantes en su propio paquete (`students`), con el modelo y el
-controlador en carpetas distintas. El controlador guarda una lista en memoria con dos
-estudiantes y la expone con dos rutas: una que devuelve la lista completa y otra que
-solo cuenta cuántos hay.
+Cada recurso separa lo que entra (los DTOs `Create`/`Update`/`PartialUpdate`) de lo que
+sale (`ResponseDto`), y el modelo interno queda escondido. El mapper es el que traduce
+entre ellos, así no expongo datos sensibles como la contraseña.
 
-La anotación `@RestController` hace que lo que retorna cada método se convierta solo a
-JSON. Con `@RequestMapping("/students")` defino la ruta base de la clase, y luego
-`@GetMapping` y `@GetMapping("/count")` arman las sub-rutas. Como en `application.yml`
-puse `context-path: /api`, esa ruta base se antepone a todo.
-
-Lo del servidor embebido me quedó claro: no instalé Tomcat aparte, ya viene dentro del
-proyecto. Por eso con `./gradlew bootRun` se levanta todo y en los logs aparece
-"Tomcat started on port 8080" y luego "Started Fundamentos01Application".
+El controlador guarda los registros en una lista en memoria y genera los ids con un
+contador. Con `ResponseEntity` controlo el código HTTP: `201` al crear, `200` al
+consultar o actualizar, `204` al eliminar y `404` cuando el id no existe. La diferencia
+entre `PUT` y `PATCH` es que PUT reemplaza todos los campos y PATCH solo cambia los que
+llegan con valor.
