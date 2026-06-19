@@ -1,16 +1,16 @@
 # Práctica 01 - Configuración de Spring Boot
 
-Esta es la primera práctica de Spring Boot de la materia de Programación y Plataformas
-Web. La idea es dejar el entorno listo, crear el proyecto y levantar un primer endpoint
-que responda en `/api/status`.
+Primera práctica de Spring Boot de la materia de Programación y Plataformas Web. Aquí
+dejo el entorno listo, levanto el servidor y armo los primeros endpoints REST: uno de
+estado y otros para un pequeño dominio de estudiantes.
 
 ## Datos del proyecto
 
 - Group: `ec.edu.ups.icc`
 - Artifact: `fundamentos01`
 - Package: `ec.edu.ups.icc.fundamentos01`
-- Java 17, Gradle (Groovy), Spring Boot 4.0.0
-- Dependencias: Spring Web y Spring Boot DevTools
+- Java 25, Gradle (Groovy), Spring Boot 4.1.0
+- Dependencias: Spring Web (starter `spring-boot-starter-webmvc`) y Spring Boot DevTools
 
 ## Cómo correrlo
 
@@ -20,71 +20,75 @@ Desde la carpeta del proyecto:
 ./gradlew bootRun
 ```
 
-Cuando arranca, el servidor (un Tomcat embebido) queda escuchando en el puerto 8080.
-Para probar el endpoint abro en el navegador:
+El servidor arranca con un Tomcat embebido en el puerto 8080. En `application.yml` dejé
+configurada una ruta base `/api`, así que todos los endpoints cuelgan de ahí.
+
+## Endpoints
+
+Estado del servicio:
 
 ```
-http://localhost:8080/api/status
+GET http://localhost:8080/api/api/status
 ```
-
-Y la respuesta es algo así:
 
 ```json
 {
   "service": "Spring Boot API",
   "status": "running",
-  "timestamp": "2026-06-18T21:01:35.821576"
+  "timestamp": "2026-06-19T02:43:22.606358Z"
 }
 ```
 
-## El endpoint
+Lista de estudiantes:
 
-El controlador está en
-`src/main/java/ec/edu/ups/icc/fundamentos01/controllers/StatusController.java`:
-
-```java
-@RestController
-public class StatusController {
-
-    @GetMapping("/api/status")
-    public Map<String, Object> status() {
-        return Map.of(
-                "service", "Spring Boot API",
-                "status", "running",
-                "timestamp", LocalDateTime.now().toString()
-        );
-    }
-}
+```
+GET http://localhost:8080/api/students
 ```
 
-## Capturas
+```json
+[
+  { "id": 2, "name": "Juan", "age": "30" },
+  { "id": 1, "name": "Diego", "age": "10" }
+]
+```
 
-Verificación de Java 17:
+Cantidad de estudiantes:
 
-![Java version](capturas/captura-01-java-version.png)
+```
+GET http://localhost:8080/api/students/count
+```
 
-Servidor levantado con `./gradlew bootRun`:
+```
+Total Estudiantes: 2
+```
 
-![Servidor corriendo](capturas/captura-02-spring-boot-running.png)
+## Estructura
 
-Respuesta del endpoint en el navegador:
+```
+src/main/java/ec/edu/ups/icc/fundamentos01/
+├── Fundamentos01Application.java     Punto de entrada
+├── StatusController.java             Endpoint de estado
+└── students/
+    ├── controllers/
+    │   └── StudentController.java    Endpoints de estudiantes
+    └── models/
+        └── Student.java              Modelo de estudiante
+```
 
-![Endpoint](capturas/captura-03-api-status.png)
-
-Estructura del proyecto:
-
-![Estructura](capturas/captura-04-estructura.png)
+La configuración va en `src/main/resources/application.yml`.
 
 ## Lo que entendí
 
-El endpoint `/api/status` responde a una petición GET y devuelve un JSON con el estado
-del servicio. Como la clase tiene `@RestController`, lo que retorna el método se
-convierte solo a JSON, así que no hace falta una vista ni una plantilla.
+Separé la lógica de estudiantes en su propio paquete (`students`), con el modelo y el
+controlador en carpetas distintas. El controlador guarda una lista en memoria con dos
+estudiantes y la expone con dos rutas: una que devuelve la lista completa y otra que
+solo cuenta cuántos hay.
 
-De Spring Boot me llamó la atención que casi no hay que configurar nada: con la
-dependencia de Spring Web ya queda armado todo lo necesario para una app web. La
-anotación `@SpringBootApplication` es la que arranca el proyecto.
+La anotación `@RestController` hace que lo que retorna cada método se convierta solo a
+JSON. Con `@RequestMapping("/students")` defino la ruta base de la clase, y luego
+`@GetMapping` y `@GetMapping("/count")` arman las sub-rutas. Como en `application.yml`
+puse `context-path: /api`, esa ruta base se antepone a todo.
 
-Lo otro importante es el servidor embebido: no tuve que instalar Tomcat aparte, ya viene
-dentro del proyecto. Por eso con un solo comando se levanta todo y en los logs aparece
+Lo del servidor embebido me quedó claro: no instalé Tomcat aparte, ya viene dentro del
+proyecto. Por eso con `./gradlew bootRun` se levanta todo y en los logs aparece
 "Tomcat started on port 8080" y luego "Started Fundamentos01Application".
