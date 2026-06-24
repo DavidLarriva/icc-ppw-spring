@@ -15,13 +15,13 @@ public interface UserService {
 
     List<UserResponseDto> findAll();
 
-    Object findOne(long id);
+    UserResponseDto findOne(Long id);
 
     UserResponseDto create(CreateUserDto dto);
 
-    Object update(long id, UpdateUserDto dto);
+    UserResponseDto update(Long id, UpdateUserDto dto);
 
-    Object partialUpdate(long id, PartialUpdateUserDto dto);
+    UserResponseDto partialUpdate(Long id, PartialUpdateUserDto dto);
 
-    Object delete(long id);
+    void delete(Long id);
 }

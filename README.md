@@ -187,3 +187,67 @@ puerta de entrada. Separarlos (cada uno con una sola responsabilidad) deja el c�
 ordenado y listo para cuando se conecte una base de datos. La **inyección de
 dependencias** es que yo solo pido `UserService` en el constructor y Spring me entrega la
 implementación (`UserServiceImpl`, la marcada con `@Service`) sin que yo la cree a mano.
+
+---
+
+# Práctica 05 - Persistencia con PostgreSQL y JPA
+
+Reemplacé la lista en memoria de `users` por una base de datos real: PostgreSQL corriendo
+en Docker, conectado con Spring Data JPA + Hibernate.
+
+## Cómo se conecta
+
+- Levanté un contenedor `postgres-dev` con Docker (PostgreSQL 16) y una base `devdb`.
+- En `application.yml` agregué los datos de conexión (`url`, `username`, `password`) y
+  `ddl-auto: update`, para que Hibernate cree/actualice las tablas solo.
+- Agregué las dependencias `spring-boot-starter-data-jpa` y el driver `postgresql`.
+
+## Piezas nuevas (por recurso)
+
+```
+core/
+└── entities/BaseEntity.java          id, createdAt, updatedAt, deleted (compartido)
+
+users/
+├── entities/UserEntity.java          @Entity, mapea la tabla "users"
+└── repositories/UserRepository.java  extiende JpaRepository<UserEntity, Long>
+```
+
+`UserMapper` ahora también convierte `Model <-> Entity`, además de `Dto <-> Model` que ya
+tenía.
+
+## Cómo cambió el servicio
+
+`UserServiceImpl` ya no tiene una `List<UserModel>`: usa `UserRepository`, que Spring
+inyecta por el constructor igual que el servicio en la Práctica 04.
+
+```java
+private final UserRepository userRepository;
+
+public UserServiceImpl(UserRepository userRepository) {
+    this.userRepository = userRepository;
+}
+```
+
+Cada método llama a `userRepository` (`save`, `findById`, `findAll`) en vez de manipular
+una lista. Si no existe el id, lanza un error simple (`IllegalStateException`); el manejo
+de errores prolijo llega en una práctica posterior. El `delete` ya no borra la fila: solo
+marca `deleted = true` (borrado lógico).
+
+## Probando que persiste de verdad
+
+```bash
+docker exec -it postgres-dev psql -U ups -d devdb -c "SELECT * FROM users;"
+```
+
+Si reinicio la aplicación, los usuarios siguen ahí (antes, con la lista en memoria, se
+perdían).
+
+## Lo que entendí
+
+El **repositorio** reemplaza por completo la lista en memoria: con `JpaRepository` ya
+tengo `save`, `findById`, `findAll`, `delete`, etc. sin escribir SQL. La diferencia entre
+**Entity** y **Model** es que la Entity sabe cómo se guarda en la tabla (tiene anotaciones
+de JPA) y el Model es solo la representación interna de la aplicación; nunca se debe
+exponer la Entity directamente al cliente. `BaseEntity` evita repetir `id`,
+`createdAt`, `updatedAt` y `deleted` en cada entidad nueva.

@@ -1,99 +1,114 @@
 package ec.edu.ups.icc.fundamentos01.users.services;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import ec.edu.ups.icc.fundamentos01.dtos.ErrorResponseDto;
-import ec.edu.ups.icc.fundamentos01.dtos.MessageResponseDto;
 import ec.edu.ups.icc.fundamentos01.users.dtos.CreateUserDto;
 import ec.edu.ups.icc.fundamentos01.users.dtos.PartialUpdateUserDto;
 import ec.edu.ups.icc.fundamentos01.users.dtos.UpdateUserDto;
 import ec.edu.ups.icc.fundamentos01.users.dtos.UserResponseDto;
+import ec.edu.ups.icc.fundamentos01.users.entities.UserEntity;
 import ec.edu.ups.icc.fundamentos01.users.mappers.UserMapper;
 import ec.edu.ups.icc.fundamentos01.users.models.UserModel;
+import ec.edu.ups.icc.fundamentos01.users.repositories.UserRepository;
 
 /*
  * Implementación del servicio de usuarios.
- * @Service le dice a Spring que cree y administre esta clase para poder
- * inyectarla donde se necesite (por ejemplo en el controlador).
- * Guarda los usuarios en memoria mientras la aplicación está encendida.
+ *
+ * En esta clase se reemplaza la lista en memoria por UserRepository.
+ * El repositorio se encarga de comunicarse con PostgreSQL mediante JPA.
  */
 @Service
 public class UserServiceImpl implements UserService {
 
-    private final List<UserModel> users = new ArrayList<>();
-    private long currentId = 1;
+    private final UserRepository userRepository;
 
+    public UserServiceImpl(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    /*
+     * Retorna todos los usuarios almacenados en PostgreSQL.
+     */
     @Override
     public List<UserResponseDto> findAll() {
-        return users.stream()
+        return userRepository.findAll()
+                .stream()
+                .map(UserMapper::toModelFromEntity)
                 .map(UserMapper::toResponse)
                 .toList();
     }
 
+    /*
+     * Busca un usuario por id.
+     * Si no existe, lanza un error simple (el manejo formal se hará después).
+     */
     @Override
-    public Object findOne(long id) {
-        UserModel user = findById(id);
-        if (user == null) {
-            return new ErrorResponseDto("Usuario no encontrado con id " + id);
-        }
-        return UserMapper.toResponse(user);
+    public UserResponseDto findOne(Long id) {
+        return userRepository.findById(id)
+                .map(UserMapper::toModelFromEntity)
+                .map(UserMapper::toResponse)
+                .orElseThrow(() -> new IllegalStateException("User not found"));
     }
 
+    /*
+     * Crea un nuevo usuario: DTO -> Model -> Entity -> guarda -> Model -> Response DTO.
+     */
     @Override
     public UserResponseDto create(CreateUserDto dto) {
-        UserModel user = UserMapper.toModel(dto);
-        user.setId(currentId++);
-        users.add(user);
-        return UserMapper.toResponse(user);
+        UserModel model = UserMapper.toModelFromDTO(dto);
+        UserEntity entity = UserMapper.toEntityFromModel(model);
+        UserEntity savedEntity = userRepository.save(entity);
+        UserModel savedModel = UserMapper.toModelFromEntity(savedEntity);
+        return UserMapper.toResponse(savedModel);
     }
 
+    /*
+     * Actualiza completamente un usuario existente.
+     */
     @Override
-    public Object update(long id, UpdateUserDto dto) {
-        UserModel user = findById(id);
-        if (user == null) {
-            return new ErrorResponseDto("Usuario no encontrado con id " + id);
-        }
-        user.setName(dto.getName());
-        user.setEmail(dto.getEmail());
-        user.setPassword(dto.getPassword());
-        return UserMapper.toResponse(user);
+    public UserResponseDto update(Long id, UpdateUserDto dto) {
+        UserEntity entity = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalStateException("User not found"));
+
+        entity.setName(dto.getName());
+        entity.setEmail(dto.getEmail());
+
+        UserEntity savedEntity = userRepository.save(entity);
+        UserModel model = UserMapper.toModelFromEntity(savedEntity);
+        return UserMapper.toResponse(model);
     }
 
+    /*
+     * Actualiza parcialmente un usuario: solo los campos enviados en el DTO.
+     */
     @Override
-    public Object partialUpdate(long id, PartialUpdateUserDto dto) {
-        UserModel user = findById(id);
-        if (user == null) {
-            return new ErrorResponseDto("Usuario no encontrado con id " + id);
-        }
+    public UserResponseDto partialUpdate(Long id, PartialUpdateUserDto dto) {
+        UserEntity entity = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalStateException("User not found"));
+
         if (dto.getName() != null) {
-            user.setName(dto.getName());
+            entity.setName(dto.getName());
         }
         if (dto.getEmail() != null) {
-            user.setEmail(dto.getEmail());
+            entity.setEmail(dto.getEmail());
         }
-        if (dto.getPassword() != null) {
-            user.setPassword(dto.getPassword());
-        }
-        return UserMapper.toResponse(user);
+
+        UserEntity savedEntity = userRepository.save(entity);
+        UserModel model = UserMapper.toModelFromEntity(savedEntity);
+        return UserMapper.toResponse(model);
     }
 
+    /*
+     * Elimina lógicamente un usuario: marca deleted = true sin borrar el registro.
+     */
     @Override
-    public Object delete(long id) {
-        boolean removed = users.removeIf(user -> user.getId() == id);
-        if (!removed) {
-            return new ErrorResponseDto("Usuario no encontrado con id " + id);
-        }
-        return new MessageResponseDto("Usuario eliminado correctamente");
-    }
+    public void delete(Long id) {
+        UserEntity entity = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalStateException("User not found"));
 
-    // Lógica de búsqueda reutilizada por varios métodos
-    private UserModel findById(long id) {
-        return users.stream()
-                .filter(user -> user.getId() == id)
-                .findFirst()
-                .orElse(null);
+        entity.setDeleted(true);
+        userRepository.save(entity);
     }
 }

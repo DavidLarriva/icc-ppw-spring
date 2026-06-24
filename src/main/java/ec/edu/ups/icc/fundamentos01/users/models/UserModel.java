@@ -5,15 +5,17 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public class UserModel {
-    private long id;    
+    private Long id;
     private String name;
     private String email;
     private LocalDateTime createdAt;
     private String password;
     private String passwordHash;
+    private LocalDateTime updatedAt;
+    private boolean deleted;
 
 
-    public UserModel(long id, String name, String email, LocalDateTime createdAt, String password) {
+    public UserModel(Long id, String name, String email, LocalDateTime createdAt, String password) {
         this.id = id;
         this.name = name;
         this.email = email;
@@ -23,11 +25,11 @@ public class UserModel {
     public UserModel() {
     }
 
-    public long getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(long id) {
+    public void setId(Long id) {
         this.id = id;
     }
 
@@ -68,6 +70,22 @@ public class UserModel {
 
     public void setPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
     }
 
 }
