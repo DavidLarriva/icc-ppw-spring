@@ -12,8 +12,8 @@ import ec.edu.ups.icc.fundamentos01.products.models.ProductModel;
  */
 public class ProductMapper {
 
-    // De CreateProductDto a ProductModel (el id lo asigna el controlador)
-    public ProductModel toModel(CreateProductDto dto) {
+    // De CreateProductDto a ProductModel (el id lo asigna el servicio)
+    public static ProductModel toModel(CreateProductDto dto) {
         ProductModel product = new ProductModel();
         product.setName(dto.getName());
         product.setPrice(dto.getPrice());
@@ -23,7 +23,7 @@ public class ProductMapper {
     }
 
     // De ProductModel a la respuesta pública
-    public ProductResponseDto toResponse(ProductModel product) {
+    public static ProductResponseDto toResponse(ProductModel product) {
         return new ProductResponseDto(
                 product.getId(),
                 product.getName(),

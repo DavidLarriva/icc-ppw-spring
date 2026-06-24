@@ -13,8 +13,8 @@ import ec.edu.ups.icc.fundamentos01.users.models.UserModel;
  */
 public class UserMapper {
 
-    // De CreateUserDto a UserModel (el id lo asigna el controlador)
-    public UserModel toModel(CreateUserDto dto) {
+    // De CreateUserDto a UserModel (el id lo asigna el servicio)
+    public static UserModel toModel(CreateUserDto dto) {
         UserModel user = new UserModel();
         user.setName(dto.getName());
         user.setEmail(dto.getEmail());
@@ -25,12 +25,12 @@ public class UserMapper {
     }
 
     // De UserModel a la respuesta pública (sin password ni passwordHash)
-    public UserResponseDto toResponse(UserModel user) {
+    public static UserResponseDto toResponse(UserModel user) {
         return new UserResponseDto(user.getId(), user.getName(), user.getEmail());
     }
 
     // Hash simple de ejemplo (no es seguro para producción)
-    private String hash(String password) {
+    private static String hash(String password) {
         if (password == null) {
             return null;
         }

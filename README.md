@@ -131,3 +131,59 @@ contador. Con `ResponseEntity` controlo el código HTTP: `201` al crear, `200` a
 consultar o actualizar, `204` al eliminar y `404` cuando el id no existe. La diferencia
 entre `PUT` y `PATCH` es que PUT reemplaza todos los campos y PATCH solo cambia los que
 llegan con valor.
+
+---
+
+# Práctica 04 - Controladores y servicios
+
+Saqué la lógica de los controladores y la moví a una capa de **servicios**. Ahora el
+controlador solo recibe la petición y se la pasa al servicio; el servicio es el que hace
+el trabajo (buscar, crear, actualizar, borrar) sobre la lista en memoria.
+
+## Cómo se conecta
+
+- El servicio se marca con `@Service` para que Spring lo cree y lo administre.
+- El controlador lo recibe por el **constructor** (inyección de dependencias): no hace
+  `new` del servicio, lo pone Spring solo.
+
+```java
+@RestController
+@RequestMapping("/users")
+public class UserController {
+    private final UserService userService;            // la interfaz
+
+    public UserController(UserService userService) {  // Spring inyecta UserServiceImpl
+        this.userService = userService;
+    }
+
+    @GetMapping
+    public List<UserResponseDto> findAll() {
+        return userService.findAll();                 // solo delega
+    }
+}
+```
+
+## Estructura nueva (por recurso)
+
+```
+users/
+├── controllers/UserController.java   Solo recibe y delega
+├── services/
+│   ├── UserService.java              Interfaz: qué se puede hacer
+│   └── UserServiceImpl.java          @Service: la lógica + la lista en memoria
+├── dtos/  models/  mappers/          igual que antes
+```
+
+`products/` se replicó igual (`ProductService` + `ProductServiceImpl`).
+
+Los endpoints son los mismos de la Práctica 03; la diferencia es interna. Cuando algo no
+se encuentra, el servicio devuelve un `ErrorResponseDto` con un mensaje (los códigos HTTP
+correctos llegan en la Práctica 07).
+
+## Lo que entendí
+
+El **servicio** es la clase que hace el trabajo de verdad; el **controlador** es solo la
+puerta de entrada. Separarlos (cada uno con una sola responsabilidad) deja el código más
+ordenado y listo para cuando se conecte una base de datos. La **inyección de
+dependencias** es que yo solo pido `UserService` en el constructor y Spring me entrega la
+implementación (`UserServiceImpl`, la marcada con `@Service`) sin que yo la cree a mano.
