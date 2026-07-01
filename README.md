@@ -251,3 +251,303 @@ tengo `save`, `findById`, `findAll`, `delete`, etc. sin escribir SQL. La diferen
 de JPA) y el Model es solo la representación interna de la aplicación; nunca se debe
 exponer la Entity directamente al cliente. `BaseEntity` evita repetir `id`,
 `createdAt`, `updatedAt` y `deleted` en cada entidad nueva.
+
+# Práctica 06 - Validación de DTOs
+
+Antes de esta práctica, un `POST /users` con `name` vacío o `email` mal escrito se
+guardaba igual en la base de datos. Ahora los DTOs de entrada validan el formato de los
+datos antes de que lleguen al servicio.
+
+## Dependencia nueva
+
+Agregué `spring-boot-starter-validation` en `build.gradle` (Jakarta Validation).
+
+## Anotaciones en los DTOs
+
+En `CreateUserDto`, `UpdateUserDto`, `PartialUpdateUserDto` (y sus equivalentes en
+`products`) agregué reglas con anotaciones de Jakarta:
+
+```java
+@NotBlank(message = "El nombre es obligatorio")
+@Size(min = 3, max = 150, message = "El nombre debe tener entre 3 y 150 caracteres")
+private String name;
+
+@NotBlank(message = "El email es obligatorio")
+@Email(message = "Debe ingresar un email válido")
+private String email;
+```
+
+En los DTOs de actualización parcial (`PartialUpdateUserDto`, `PartialUpdateProductDto`)
+no usé `@NotBlank`/`@NotNull`, porque ahí los campos son opcionales: solo se valida el
+formato del campo que sí llega.
+
+En `products` agregué `@Min(0)` para `price` y `stock`, porque no tiene sentido un precio
+o stock negativo.
+
+## Activar la validación en el controller
+
+Sin `@Valid`, las anotaciones del DTO no se ejecutan. Hay que agregarlo en cada
+`@RequestBody`:
+
+```java
+@PostMapping
+public UserResponseDto create(@Valid @RequestBody CreateUserDto dto) {
+    return userService.create(dto);
+}
+```
+
+Hice lo mismo en `update` y `partialUpdate`, en `UserController` y en `ProductController`.
+
+## Validación de negocio en el servicio
+
+La validación del DTO solo revisa el formato. Que el email ya esté registrado es una
+regla de negocio, así que la agregué en `UserServiceImpl.create`:
+
+```java
+if (userRepository.findByEmail(dto.getEmail()).isPresent()) {
+    throw new ConflictException("Email already registered");
+}
+```
+
+Repliqué la misma idea en `products`: agregué `findByName` en `ProductRepository` y
+valido que no exista ya un producto activo con ese nombre antes de crear uno nuevo.
+
+## Lo que entendí
+
+Hay dos niveles de validación bien distintos: el **DTO** valida formato (¿el campo viene,
+tiene el tamaño correcto, el email tiene forma de email?) sin tocar la base de datos; el
+**servicio** valida reglas de negocio (¿ya existe ese email?, ¿ya existe ese nombre de
+producto?), que sí necesitan consultar el repositorio. El DTO no debería depender de la
+base de datos, y el servicio no debería repetir validaciones de formato que ya hizo el DTO.
+
+# Práctica 07 - Manejo global de errores
+
+Antes de esta práctica, cuando un usuario no existía se lanzaba `IllegalStateException`,
+que Spring traduce en un `500 Internal Server Error` con el stacktrace visible. Eso es
+incorrecto: un recurso inexistente debería responder `404`, no un error interno.
+
+## Excepciones propias
+
+Creé el paquete `core/exceptions/` con esta estructura:
+
+```
+core/exceptions/
+├── base/ApplicationException.java      excepción abstracta, guarda un HttpStatus
+├── domain/
+│   ├── NotFoundException.java          -> 404
+│   ├── ConflictException.java          -> 409
+│   └── BadRequestException.java        -> 400
+├── response/ErrorResponse.java         formato único de error (timestamp, status, error, message, path, details)
+└── handler/GlobalExceptionHandler.java @RestControllerAdvice
+```
+
+`ApplicationException` es abstracta y guarda el `HttpStatus` asociado; `NotFoundException`,
+`ConflictException` y `BadRequestException` solo llaman al constructor con su status fijo.
+
+## El handler global
+
+`GlobalExceptionHandler` usa `@RestControllerAdvice` para capturar excepciones de
+**cualquier** controller, sin que cada uno tenga que hacer `try/catch`:
+
+```java
+@ExceptionHandler(ApplicationException.class)
+public ResponseEntity<ErrorResponse> handleApplicationException(
+        ApplicationException ex, HttpServletRequest request) {
+    return ResponseEntity.status(ex.getStatus())
+            .body(new ErrorResponse(ex.getStatus(), ex.getMessage(), request.getRequestURI()));
+}
+```
+
+También tiene un handler para `MethodArgumentNotValidException` (cuando falla `@Valid`,
+de la Práctica 06) que arma el campo `details` con el error de cada campo, y un handler
+genérico para `Exception` que evita exponer stacktraces al cliente y devuelve `500`.
+
+## Reemplazo en los servicios
+
+En `UserServiceImpl` y `ProductServiceImpl` cambié todos los
+`throw new IllegalStateException(...)` por:
+
+```java
+.orElseThrow(() -> new NotFoundException("User not found"));
+```
+
+y agregué una validación extra: si la entidad existe pero tiene `deleted = true`, también
+lanza `NotFoundException` (un registro borrado lógicamente no debería poder consultarse,
+actualizarse ni eliminarse de nuevo). También hice que `findAll` filtre `deleted = true`,
+para que un producto/usuario eliminado no aparezca en los listados.
+
+Email duplicado en `users` y nombre duplicado en `products` ahora lanzan
+`ConflictException` (409) en vez de un error genérico.
+
+## Probando los casos
+
+```bash
+# 400 - validación de formato
+curl -X POST localhost:8080/api/products -H "Content-Type: application/json" \
+  -d '{"name":"","price":-5,"stock":-1}'
+
+# 409 - nombre duplicado
+curl -X POST localhost:8080/api/products -H "Content-Type: application/json" \
+  -d '{"name":"laptop","price":800,"stock":5}'
+
+# 404 - producto eliminado o inexistente
+curl localhost:8080/api/products/999
+```
+
+Las tres respuestas usan el mismo formato (`timestamp`, `status`, `error`, `message`,
+`path`, y `details` solo cuando aplica).
+
+## Lo que entendí
+
+Sin manejo centralizado, cada controller podría devolver errores con forma distinta, lo
+que vuelve la API difícil de consumir desde el frontend. Con `@RestControllerAdvice`, el
+servicio solo lanza la excepción que describe qué pasó (`NotFoundException`,
+`ConflictException`, etc.) y nunca construye una respuesta HTTP a mano; el handler global
+es el único lugar que decide cómo se ve un error. Esto separa claramente la lógica de
+negocio (el servicio) del transporte HTTP (el handler).
+
+# Práctica 08 - Relaciones entre entidades (ManyToOne)
+
+Hasta aquí `users` y `products` eran entidades independientes. En esta práctica agregué un
+módulo nuevo, `categories`, y relacioné `ProductEntity` con `UserEntity` (quién lo
+registró) y con `CategoryEntity` (a qué categoría pertenece).
+
+```txt
+Muchos productos → un usuario (owner)
+Muchos productos → una categoría
+```
+
+## Módulo nuevo: categories
+
+Repliqué exactamente la misma estructura por capas que ya tenía `users`/`products`
+(entity, model, mapper, dtos, repository, service, controller):
+
+```
+categories/
+├── controllers/CategoryController.java
+├── dtos/CreateCategoryDto.java, UpdateCategoryDto.java, CategoryResponseDto.java
+├── entities/CategoryEntity.java       @Entity, name único + description
+├── models/CategoryModel.java
+├── mappers/CategoryMapper.java
+├── repositories/CategoryRepository.java
+└── services/CategoryService.java, CategoryServiceImpl.java
+```
+
+Mismos 5 endpoints que `users` (sin PATCH, no lo pedía la práctica):
+`GET /api/categories`, `GET /api/categories/{id}`, `POST /api/categories`,
+`PUT /api/categories/{id}`, `DELETE /api/categories/{id}`.
+
+## ProductEntity con relaciones @ManyToOne
+
+```java
+@ManyToOne(optional = false, fetch = FetchType.LAZY)
+@JoinColumn(name = "user_id", nullable = false)
+private UserEntity owner;
+
+@ManyToOne(optional = false, fetch = FetchType.LAZY)
+@JoinColumn(name = "category_id", nullable = false)
+private CategoryEntity category;
+```
+
+`@ManyToOne` indica que muchos productos apuntan a un mismo usuario o categoría.
+`@JoinColumn` es la que crea la clave foránea (`user_id`, `category_id`) en la tabla
+`products`. Usé `fetch = FetchType.LAZY` porque no quiero traer el usuario y la categoría
+completos cada vez que Hibernate carga un producto; solo se consultan cuando el mapper
+accede a `entity.getOwner()` / `entity.getCategory()`.
+
+Con `ddl-auto: update`, Hibernate agregó las columnas y las foreign keys solo, pero como
+ya tenía productos de prueba sin `user_id`/`category_id`, tuve que borrar esas filas
+viejas primero (`NOT NULL` no se puede aplicar sobre filas existentes sin valor).
+
+## DTOs con IDs de las relaciones
+
+`CreateProductDto` ahora pide `userId` y `categoryId` (`@NotNull`); `UpdateProductDto` y
+`PartialUpdateProductDto` piden `categoryId` (el `PUT` no permite cambiar el owner, solo
+la categoría). La entidad completa nunca se expone: los DTOs de entrada solo llevan el id,
+nunca el objeto relacionado.
+
+`ProductResponseDto` sí devuelve objetos anidados, reutilizando los DTOs de respuesta que
+ya existían (`UserResponseDto`, `CategoryResponseDto`) para no repetir campos ni exponer
+`passwordHash`:
+
+```json
+{
+  "id": 9,
+  "name": "Laptop Gaming 08",
+  "price": 1200.0,
+  "stock": 10,
+  "owner": { "id": 7, "name": "Juan Perez", "email": "juan.p08@ups.edu.ec" },
+  "category": { "id": 1, "name": "Electronicos", "description": "Dispositivos electronicos" },
+  "createdAt": "2026-07-01T09:52:15.419525",
+  "updatedAt": null
+}
+```
+
+## ProductServiceImpl valida las relaciones antes de guardar
+
+En `create`, antes de armar el `ProductEntity` busco el usuario y la categoría por id; si
+no existen o están eliminados (`deleted = true`), lanzo `NotFoundException` (404) sin
+llegar a tocar `ProductRepository`:
+
+```java
+UserEntity owner = userRepository.findById(dto.getUserId())
+        .orElseThrow(() -> new NotFoundException("User not found"));
+if (owner.isDeleted()) {
+    throw new NotFoundException("User not found");
+}
+
+CategoryEntity category = categoryRepository.findById(dto.getCategoryId())
+        .orElseThrow(() -> new NotFoundException("Category not found"));
+if (category.isDeleted()) {
+    throw new NotFoundException("Category not found");
+}
+```
+
+Recién ahí valido el nombre duplicado y guardo. En `update`/`partialUpdate` repetí la
+misma validación, pero solo para `categoryId` (el owner no cambia una vez creado el
+producto).
+
+## Consultas relacionales
+
+Agregué a `ProductRepository` dos métodos derivados, usando el `_` para navegar la
+relación:
+
+```java
+List<ProductEntity> findByOwner_IdAndDeletedFalse(Long ownerId);
+List<ProductEntity> findByCategory_IdAndDeletedFalse(Long categoryId);
+```
+
+Y dos endpoints nuevos en `ProductController`, cada uno validando primero que el usuario o
+la categoría existan:
+
+```txt
+GET /api/products/user/{userId}
+GET /api/products/category/{categoryId}
+```
+
+## Probando en PostgreSQL
+
+```bash
+docker exec -it postgres-dev psql -U ups -d devdb -c "\d products"
+```
+
+```sql
+SELECT p.id, p.name, p.user_id, u.name AS user_name, p.category_id, c.name AS category_name
+FROM products p
+INNER JOIN users u ON p.user_id = u.id
+INNER JOIN categories c ON p.category_id = c.id;
+```
+
+## Lo que entendí
+
+`@ManyToOne` + `@JoinColumn` son las dos anotaciones que traducen una relación del modelo
+de dominio a una clave foránea real en la base de datos; el lado "muchos" (`ProductEntity`)
+es el que guarda la referencia. `FetchType.LAZY` evita que cada consulta de productos
+dispare automáticamente un `SELECT` a `users` y a `categories`: eso solo pasa cuando el
+mapper realmente necesita esos datos para armar la respuesta. La validación de que el
+usuario/categoría existan es responsabilidad del **servicio**, no de la base de datos ni
+del DTO: la foreign key evita datos huérfanos a nivel de PostgreSQL, pero sin la validación
+en `ProductServiceImpl` el error llegaría como un `500` feo de Hibernate en vez de un `404`
+claro. También entendí por qué el DTO de entrada solo lleva el id (`userId`, `categoryId`)
+y nunca la entidad completa: así el cliente no puede inventarse un usuario o modificarlo de
+paso al crear un producto, solo puede referenciarlo.

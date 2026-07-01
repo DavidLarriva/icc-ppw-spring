@@ -1,0 +1,25 @@
+meta {
+  name: 03 - Create product
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/products
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "mac",
+    "price": 8000,
+    "stock": 2,
+    "userId": 5,
+    "categoryId": 1
+  }
+}

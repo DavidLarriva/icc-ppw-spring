@@ -2,6 +2,8 @@ package ec.edu.ups.icc.fundamentos01.products.controllers;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
+
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -34,27 +36,47 @@ public class ProductController {
     }
 
     @GetMapping("/{id}")
-    public Object findOne(@PathVariable long id) {
+    public ProductResponseDto findOne(@PathVariable Long id) {
         return productService.findOne(id);
     }
 
     @PostMapping
-    public ProductResponseDto create(@RequestBody CreateProductDto dto) {
+    public ProductResponseDto create(@Valid @RequestBody CreateProductDto dto) {
         return productService.create(dto);
     }
 
     @PutMapping("/{id}")
-    public Object update(@PathVariable long id, @RequestBody UpdateProductDto dto) {
+    public ProductResponseDto update(@PathVariable Long id, @Valid @RequestBody UpdateProductDto dto) {
         return productService.update(id, dto);
     }
 
     @PatchMapping("/{id}")
-    public Object partialUpdate(@PathVariable long id, @RequestBody PartialUpdateProductDto dto) {
+    public ProductResponseDto partialUpdate(@PathVariable Long id, @Valid @RequestBody PartialUpdateProductDto dto) {
         return productService.partialUpdate(id, dto);
     }
 
     @DeleteMapping("/{id}")
-    public Object delete(@PathVariable long id) {
-        return productService.delete(id);
+    public void delete(@PathVariable Long id) {
+        productService.delete(id);
+    }
+
+    /*
+     * Endpoint para buscar productos por id de usuario.
+     *
+     * GET /products/user/{userId}
+     */
+    @GetMapping("/user/{userId}")
+    public List<ProductResponseDto> findByUserId(@PathVariable Long userId) {
+        return productService.findByUserId(userId);
+    }
+
+    /*
+     * Endpoint para buscar productos por id de categoría.
+     *
+     * GET /products/category/{categoryId}
+     */
+    @GetMapping("/category/{categoryId}")
+    public List<ProductResponseDto> findByCategoryId(@PathVariable Long categoryId) {
+        return productService.findByCategoryId(categoryId);
     }
 }

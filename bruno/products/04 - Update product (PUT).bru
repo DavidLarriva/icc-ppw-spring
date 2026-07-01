@@ -1,0 +1,24 @@
+meta {
+  name: 04 - Update product (PUT)
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/products/1
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "notebook",
+    "price": 800,
+    "stock": 5,
+    "categoryId": 1
+  }
+}

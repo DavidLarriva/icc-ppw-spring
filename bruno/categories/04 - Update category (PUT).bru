@@ -1,0 +1,22 @@
+meta {
+  name: 04 - Update category (PUT)
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/categories/1
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Electronica",
+    "description": "Dispositivos y accesorios electronicos"
+  }
+}

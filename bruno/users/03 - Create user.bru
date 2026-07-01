@@ -1,0 +1,23 @@
+meta {
+  name: 03 - Create user
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/users
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Ana Torres",
+    "email": "ana@example.com",
+    "password": "secret123"
+  }
+}

@@ -4,16 +4,26 @@ import java.time.LocalDateTime;
 
 public class ProductModel {
 
-    private long id;
+    private Long id;
     private String name;
     private double price;
     private int stock;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private boolean deleted;
+
+    private Long ownerId;
+    private String ownerName;
+    private String ownerEmail;
+
+    private Long categoryId;
+    private String categoryName;
+    private String categoryDescription;
 
     public ProductModel() {
     }
 
-    public ProductModel(long id, String name, double price, int stock, LocalDateTime createdAt) {
+    public ProductModel(Long id, String name, double price, int stock, LocalDateTime createdAt) {
         this.id = id;
         this.name = name;
         this.price = price;
@@ -21,11 +31,11 @@ public class ProductModel {
         this.createdAt = createdAt;
     }
 
-    public long getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(long id) {
+    public void setId(Long id) {
         this.id = id;
     }
 
@@ -59,5 +69,69 @@ public class ProductModel {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
+    }
+
+    public Long getOwnerId() {
+        return ownerId;
+    }
+
+    public void setOwnerId(Long ownerId) {
+        this.ownerId = ownerId;
+    }
+
+    public String getOwnerName() {
+        return ownerName;
+    }
+
+    public void setOwnerName(String ownerName) {
+        this.ownerName = ownerName;
+    }
+
+    public String getOwnerEmail() {
+        return ownerEmail;
+    }
+
+    public void setOwnerEmail(String ownerEmail) {
+        this.ownerEmail = ownerEmail;
+    }
+
+    public Long getCategoryId() {
+        return categoryId;
+    }
+
+    public void setCategoryId(Long categoryId) {
+        this.categoryId = categoryId;
+    }
+
+    public String getCategoryName() {
+        return categoryName;
+    }
+
+    public void setCategoryName(String categoryName) {
+        this.categoryName = categoryName;
+    }
+
+    public String getCategoryDescription() {
+        return categoryDescription;
+    }
+
+    public void setCategoryDescription(String categoryDescription) {
+        this.categoryDescription = categoryDescription;
     }
 }

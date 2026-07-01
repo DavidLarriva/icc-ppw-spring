@@ -1,25 +1,46 @@
 package ec.edu.ups.icc.fundamentos01.products.dtos;
 
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 /*
  * DTO utilizado para recibir del cliente los datos necesarios
  * para crear un nuevo producto.
  *
+ * Incluye userId y categoryId porque el producto debe relacionarse
+ * con un usuario y una categoría existentes.
  * No incluye id (lo genera el servidor).
  * No incluye createdAt (lo asigna el servidor).
  */
 public class CreateProductDto {
 
+    @NotBlank(message = "El nombre es obligatorio")
+    @Size(min = 3, max = 150, message = "El nombre debe tener entre 3 y 150 caracteres")
     private String name;
+
+    @Min(value = 0, message = "El precio debe ser mayor o igual a 0")
     private double price;
+
+    @Min(value = 0, message = "El stock debe ser mayor o igual a 0")
     private int stock;
+
+    @NotNull(message = "El ID del usuario es obligatorio")
+    private Long userId;
+
+    @NotNull(message = "El ID de la categoría es obligatorio")
+    private Long categoryId;
 
     public CreateProductDto() {
     }
 
-    public CreateProductDto(String name, double price, int stock) {
+    public CreateProductDto(String name, double price, int stock, Long userId, Long categoryId) {
         this.name = name;
         this.price = price;
         this.stock = stock;
+        this.userId = userId;
+        this.categoryId = categoryId;
     }
 
     public String getName() {
@@ -44,5 +65,21 @@ public class CreateProductDto {
 
     public void setStock(int stock) {
         this.stock = stock;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
+    public Long getCategoryId() {
+        return categoryId;
+    }
+
+    public void setCategoryId(Long categoryId) {
+        this.categoryId = categoryId;
     }
 }

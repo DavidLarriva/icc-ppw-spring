@@ -1,18 +1,20 @@
 package ec.edu.ups.icc.fundamentos01.users.dtos;
 
-/*
- * DTO utilizado para recibir del cliente los datos de un usuario
- * en una actualización parcial (PATCH).
- *
- * Todos los campos son opcionales: solo se actualizan los que
- * lleguen con valor (los nulos se ignoran).
- * No incluye id (se toma de la ruta).
- * No incluye passwordHash.
- */
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Size;
+
+
 public class PartialUpdateUserDto {
 
+    @Size(min = 3, max = 150, message = "El nombre debe tener entre 3 y 150 caracteres")
     private String name;
+
+    @Email(message = "Debe ingresar un email válido")
+    @Size(max = 150, message = "El email no debe superar los 150 caracteres")
     private String email;
+
+    //agggg
+    @Size(min = 4, message = "La contraseña debe tener al menos 4 caracteres")
     private String password;
 
     // Constructor vacío

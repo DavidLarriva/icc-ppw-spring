@@ -1,0 +1,21 @@
+meta {
+  name: 05 - Partial update product (PATCH)
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/products/1
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "categoryId": 2
+  }
+}

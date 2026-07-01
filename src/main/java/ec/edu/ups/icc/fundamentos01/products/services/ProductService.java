@@ -15,13 +15,17 @@ public interface ProductService {
 
     List<ProductResponseDto> findAll();
 
-    Object findOne(long id);
+    ProductResponseDto findOne(Long id);
 
     ProductResponseDto create(CreateProductDto dto);
 
-    Object update(long id, UpdateProductDto dto);
+    ProductResponseDto update(Long id, UpdateProductDto dto);
 
-    Object partialUpdate(long id, PartialUpdateProductDto dto);
+    ProductResponseDto partialUpdate(Long id, PartialUpdateProductDto dto);
 
-    Object delete(long id);
+    void delete(Long id);
+
+    List<ProductResponseDto> findByUserId(Long userId);
+
+    List<ProductResponseDto> findByCategoryId(Long categoryId);
 }

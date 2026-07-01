@@ -8,8 +8,7 @@ import ec.edu.ups.icc.fundamentos01.users.dtos.UpdateUserDto;
 import ec.edu.ups.icc.fundamentos01.users.dtos.UserResponseDto;
 
 /*
- * Contrato del servicio de usuarios.
- * Aquí va la lógica de negocio; el controlador solo delega en estos métodos.
+
  */
 public interface UserService {
 
