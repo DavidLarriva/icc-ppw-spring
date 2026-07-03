@@ -1,0 +1,16 @@
+meta {
+  name: 10 - List products by user invalid price range (400)
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/users/5/products?minPrice=1500&maxPrice=9
+  body: none
+  auth: none
+}
+
+params:query {
+  minPrice: 1500
+  maxPrice: 9
+}

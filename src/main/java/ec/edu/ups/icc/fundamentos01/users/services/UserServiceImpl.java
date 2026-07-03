@@ -4,10 +4,15 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import ec.edu.ups.icc.fundamentos01.core.exceptions.domain.BadRequestException;
 import ec.edu.ups.icc.fundamentos01.core.exceptions.domain.ConflictException;
 import ec.edu.ups.icc.fundamentos01.core.exceptions.domain.NotFoundException;
+import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
+import ec.edu.ups.icc.fundamentos01.products.mappers.ProductMapper;
+import ec.edu.ups.icc.fundamentos01.products.repositories.ProductRepository;
 import ec.edu.ups.icc.fundamentos01.users.dtos.CreateUserDto;
 import ec.edu.ups.icc.fundamentos01.users.dtos.PartialUpdateUserDto;
+import ec.edu.ups.icc.fundamentos01.users.dtos.ProductFilterDto;
 import ec.edu.ups.icc.fundamentos01.users.dtos.UpdateUserDto;
 import ec.edu.ups.icc.fundamentos01.users.dtos.UserResponseDto;
 import ec.edu.ups.icc.fundamentos01.users.entities.UserEntity;
@@ -21,8 +26,11 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
 
-    public UserServiceImpl(UserRepository userRepository) {
+    private final ProductRepository productRepository;
+
+    public UserServiceImpl(UserRepository userRepository, ProductRepository productRepository) {
         this.userRepository = userRepository;
+        this.productRepository = productRepository;
     }
 
     
@@ -123,5 +131,48 @@ public class UserServiceImpl implements UserService {
 
         entity.setDeleted(true);
         userRepository.save(entity);
+    }
+
+    /*
+     * Retorna los productos activos de un usuario, aplicando filtros opcionales.
+     *
+     * Primero valida que el usuario exista y no esté eliminado.
+     * Luego valida que el rango de precio sea coherente (minPrice <= maxPrice)
+     * antes de consultar la base de datos.
+     */
+    @Override
+    public List<ProductResponseDto> findProductsByUser(Long userId, ProductFilterDto filters) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        if (user.isDeleted()) {
+            throw new NotFoundException("User not found");
+        }
+
+        if (!filters.hasValidPriceRange()) {
+            throw new BadRequestException("El precio máximo debe ser mayor o igual al precio mínimo");
+        }
+
+        String name = normalizeName(filters.getName());
+
+        return productRepository.findByOwnerIdWithFilters(
+                        userId,
+                        name,
+                        filters.getMinPrice(),
+                        filters.getMaxPrice())
+                .stream()
+                .map(ProductMapper::toModelFromEntity)
+                .map(ProductMapper::toResponse)
+                .toList();
+    }
+
+    /*
+     * Convierte un texto vacío en null para que el repositorio ignore el filtro por nombre.
+     */
+    private String normalizeName(String name) {
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        return name.trim();
     }
 }

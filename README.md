@@ -551,3 +551,78 @@ en `ProductServiceImpl` el error llegaría como un `500` feo de Hibernate en vez
 claro. También entendí por qué el DTO de entrada solo lleva el id (`userId`, `categoryId`)
 y nunca la entidad completa: así el cliente no puede inventarse un usuario o modificarlo de
 paso al crear un producto, solo puede referenciarlo.
+
+# Práctica 09 (parte 1) - Filtros con query params
+
+Antes tenía `GET /api/products/user/{userId}` para ver los productos de un usuario, pero esa
+ruta no se siente natural: el usuario es lo principal acá, no el producto. Así que armé la
+versión "al revés": `GET /api/users/{id}/products`, y de paso le agregué filtros.
+
+## El endpoint nuevo
+
+```txt
+GET /api/users/1/products
+GET /api/users/1/products?name=laptop
+GET /api/users/1/products?minPrice=400&maxPrice=700
+```
+
+Se puede filtrar por nombre (busca coincidencia parcial, no hace falta escribirlo exacto) y
+por un rango de precio. Los tres filtros son opcionales: si no mandas ninguno, te trae todos
+los productos del usuario.
+
+## Cómo lo armé
+
+Un DTO nuevo (`ProductFilterDto`) recibe esos filtros directo desde la URL, sin que yo tenga
+que parsear nada a mano:
+
+```java
+@GetMapping("/{id}/products")
+public List<ProductResponseDto> findProductsByUser(
+        @PathVariable Long id,
+        @Valid @ModelAttribute ProductFilterDto filters
+) {
+    return userService.findProductsByUser(id, filters);
+}
+```
+
+`@ModelAttribute` es como `@RequestBody`, pero para query params en vez de JSON.
+
+Puse toda la lógica en `UserService`/`UserServiceImpl` (no en `ProductService`), porque el
+usuario es el dueño del contexto: primero valida que el usuario exista, después valida que
+el rango de precio tenga sentido (`minPrice` no puede ser mayor que `maxPrice`), y recién
+ahí le pide los productos al `ProductRepository`.
+
+La consulta con los filtros la escribí a mano con `@Query`, porque Spring Data JPA no puede
+generar sola una consulta donde un filtro puede venir o no venir:
+
+```java
+@Query("""
+        SELECT p FROM ProductEntity p
+        WHERE p.deleted = false
+          AND p.owner.id = :userId
+          AND (COALESCE(:name, '') = '' OR LOWER(p.name) LIKE LOWER(CONCAT('%', COALESCE(:name, ''), '%')))
+          AND (:minPrice IS NULL OR p.price >= :minPrice)
+          AND (:maxPrice IS NULL OR p.price <= :maxPrice)
+        """)
+```
+
+Cada condición dice "si no me mandaron este filtro, ignórala". El `LIKE` con `%...%` es lo
+que permite buscar "laptop" y que aparezca aunque el producto se llame "Laptop Gaming 08".
+
+## Un bug con el que me topé
+
+Al probarlo sin el filtro `name`, PostgreSQL tiraba un error rarísimo:
+`function lower(bytea) does not exist`. Pasaba porque cuando `name` llega en `null`,
+Postgres no logra adivinar qué tipo de dato es ese `null` dentro del `LOWER(...)`. Se
+arregla envolviéndolo en `COALESCE(:name, '')`, para que nunca le llegue un `null` puro a
+esa parte de la consulta.
+
+## Lo que entendí
+
+Hay dos tipos de validación bien distintos: la que revisa el **formato** de un solo campo
+(`@Size`, `@DecimalMin` en el DTO, se aplica sola con `@Valid`) y la que compara **dos
+campos entre sí** o necesita la base de datos (eso no lo puede hacer una anotación simple,
+así que va a mano en el **Service**, con un `if` y un `throw`). Por eso `minPrice <=
+maxPrice` se valida en `UserServiceImpl` y no en el DTO. También entendí que Bruno no
+"hace" el filtro: solo manda la URL con los query params, todo el trabajo real (recibirlos,
+validarlos, aplicarlos en el SQL) pasa en el backend.

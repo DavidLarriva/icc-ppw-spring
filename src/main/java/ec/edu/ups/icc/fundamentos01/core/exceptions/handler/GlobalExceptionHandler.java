@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -70,6 +71,37 @@ public class GlobalExceptionHandler {
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.BAD_REQUEST,
                 "Datos de entrada inválidos",
+                request.getRequestURI(),
+                errors
+        );
+
+        return ResponseEntity
+                .badRequest()
+                .body(response);
+    }
+
+    /*
+     * Maneja errores de validación en query params recibidos con @ModelAttribute.
+     *
+     * Se ejecuta cuando falla @Valid sobre un DTO de filtros (por ejemplo,
+     * ProductFilterDto en GET /users/{id}/products?minPrice=-5).
+     */
+    @ExceptionHandler(BindException.class)
+    public ResponseEntity<ErrorResponse> handleBindException(
+            BindException ex,
+            HttpServletRequest request
+    ) {
+        Map<String, String> errors = new HashMap<>();
+
+        ex.getBindingResult()
+                .getFieldErrors()
+                .forEach(error ->
+                        errors.put(error.getField(), error.getDefaultMessage())
+                );
+
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.BAD_REQUEST,
+                "Parámetros de consulta inválidos",
                 request.getRequestURI(),
                 errors
         );
