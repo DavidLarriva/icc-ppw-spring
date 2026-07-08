@@ -4,8 +4,11 @@ import java.util.List;
 
 import jakarta.validation.Valid;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import ec.edu.ups.icc.fundamentos01.core.dtos.PaginationDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.CreateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.PartialUpdateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
@@ -30,9 +34,37 @@ public class ProductController {
         this.productService = productService;
     }
 
+    /*
+     * Endpoint normal. Se mantiene sin paginación para comparar con los paginados.
+     *
+     * GET /api/products
+     */
     @GetMapping
     public List<ProductResponseDto> findAll() {
         return productService.findAll();
+    }
+
+    /*
+     * Endpoint paginado usando Page (incluye totalElements, totalPages, etc.).
+     *
+     * GET /api/products/page
+     * GET /api/products/page?page=0&size=5
+     * GET /api/products/page?page=0&size=5&sortBy=price&direction=desc
+     */
+    @GetMapping("/page")
+    public Page<ProductResponseDto> findAllPage(@Valid @ModelAttribute PaginationDto pagination) {
+        return productService.findAllPage(pagination);
+    }
+
+    /*
+     * Endpoint paginado usando Slice (más liviano, sin COUNT).
+     *
+     * GET /api/products/slice
+     * GET /api/products/slice?page=0&size=5&sortBy=createdAt&direction=desc
+     */
+    @GetMapping("/slice")
+    public Slice<ProductResponseDto> findAllSlice(@Valid @ModelAttribute PaginationDto pagination) {
+        return productService.findAllSlice(pagination);
     }
 
     @GetMapping("/{id}")

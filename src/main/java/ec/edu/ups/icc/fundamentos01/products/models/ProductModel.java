@@ -1,6 +1,9 @@
 package ec.edu.ups.icc.fundamentos01.products.models;
 
 import java.time.LocalDateTime;
+import java.util.List;
+
+import ec.edu.ups.icc.fundamentos01.categories.models.CategoryModel;
 
 public class ProductModel {
 
@@ -16,9 +19,7 @@ public class ProductModel {
     private String ownerName;
     private String ownerEmail;
 
-    private Long categoryId;
-    private String categoryName;
-    private String categoryDescription;
+    private List<CategoryModel> categories;
 
     public ProductModel() {
     }
@@ -111,27 +112,11 @@ public class ProductModel {
         this.ownerEmail = ownerEmail;
     }
 
-    public Long getCategoryId() {
-        return categoryId;
+    public List<CategoryModel> getCategories() {
+        return categories;
     }
 
-    public void setCategoryId(Long categoryId) {
-        this.categoryId = categoryId;
-    }
-
-    public String getCategoryName() {
-        return categoryName;
-    }
-
-    public void setCategoryName(String categoryName) {
-        this.categoryName = categoryName;
-    }
-
-    public String getCategoryDescription() {
-        return categoryDescription;
-    }
-
-    public void setCategoryDescription(String categoryDescription) {
-        this.categoryDescription = categoryDescription;
+    public void setCategories(List<CategoryModel> categories) {
+        this.categories = categories;
     }
 }

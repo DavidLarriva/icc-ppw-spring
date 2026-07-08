@@ -1,15 +1,17 @@
 package ec.edu.ups.icc.fundamentos01.products.dtos;
 
+import java.util.Set;
+
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 
 /*
  * DTO utilizado para recibir del cliente los datos de un producto
  * en una actualización completa (PUT).
  *
- * Reemplaza todos los campos editables del producto, incluida la categoría.
+ * Reemplaza todos los campos editables del producto, incluidas las categorías.
  * No permite cambiar el usuario propietario.
  * No incluye id (se toma de la ruta).
  * No incluye createdAt.
@@ -26,17 +28,17 @@ public class UpdateProductDto {
     @Min(value = 0, message = "El stock debe ser mayor o igual a 0")
     private int stock;
 
-    @NotNull(message = "El ID de la categoría es obligatorio")
-    private Long categoryId;
+    @NotEmpty(message = "Debe seleccionar al menos una categoría")
+    private Set<Long> categoryIds;
 
     public UpdateProductDto() {
     }
 
-    public UpdateProductDto(String name, double price, int stock, Long categoryId) {
+    public UpdateProductDto(String name, double price, int stock, Set<Long> categoryIds) {
         this.name = name;
         this.price = price;
         this.stock = stock;
-        this.categoryId = categoryId;
+        this.categoryIds = categoryIds;
     }
 
     public String getName() {
@@ -63,11 +65,11 @@ public class UpdateProductDto {
         this.stock = stock;
     }
 
-    public Long getCategoryId() {
-        return categoryId;
+    public Set<Long> getCategoryIds() {
+        return categoryIds;
     }
 
-    public void setCategoryId(Long categoryId) {
-        this.categoryId = categoryId;
+    public void setCategoryIds(Set<Long> categoryIds) {
+        this.categoryIds = categoryIds;
     }
 }

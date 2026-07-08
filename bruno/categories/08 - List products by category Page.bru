@@ -1,0 +1,18 @@
+meta {
+  name: 08 - List products by category Page
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/categories/1/products/page?page=0&size=5&sortBy=price&direction=desc
+  body: none
+  auth: none
+}
+
+params:query {
+  page: 0
+  size: 5
+  sortBy: price
+  direction: desc
+}

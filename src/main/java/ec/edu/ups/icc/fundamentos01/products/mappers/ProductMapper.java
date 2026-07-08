@@ -2,8 +2,7 @@ package ec.edu.ups.icc.fundamentos01.products.mappers;
 
 import java.time.LocalDateTime;
 
-import ec.edu.ups.icc.fundamentos01.categories.dtos.CategoryResponseDto;
-import ec.edu.ups.icc.fundamentos01.categories.entities.CategoryEntity;
+import ec.edu.ups.icc.fundamentos01.categories.mappers.CategoryMapper;
 import ec.edu.ups.icc.fundamentos01.products.dtos.CreateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
 import ec.edu.ups.icc.fundamentos01.products.entities.ProductEntity;
@@ -42,10 +41,9 @@ public class ProductMapper {
         product.setOwnerName(owner.getName());
         product.setOwnerEmail(owner.getEmail());
 
-        CategoryEntity category = entity.getCategory();
-        product.setCategoryId(category.getId());
-        product.setCategoryName(category.getName());
-        product.setCategoryDescription(category.getDescription());
+        product.setCategories(entity.getCategories().stream()
+                .map(CategoryMapper::toModelFromEntity)
+                .toList());
 
         return product;
     }
@@ -60,7 +58,7 @@ public class ProductMapper {
         return entity;
     }
 
-    // De ProductModel a la respuesta pública, con owner y category anidados
+    // De ProductModel a la respuesta pública, con owner y categories anidados
     public static ProductResponseDto toResponse(ProductModel product) {
         ProductResponseDto dto = new ProductResponseDto(
                 product.getId(),
@@ -71,9 +69,11 @@ public class ProductMapper {
         dto.setCreatedAt(product.getCreatedAt());
         dto.setUpdatedAt(product.getUpdatedAt());
 
-         dto.setOwner(new UserResponseDto(product.getOwnerId(), product.getOwnerName(), product.getOwnerEmail()));
-         dto.setCategory(new CategoryResponseDto(product.getCategoryId(), product.getCategoryName(),
-                product.getCategoryDescription()));
+        dto.setOwner(new UserResponseDto(product.getOwnerId(), product.getOwnerName(), product.getOwnerEmail()));
+
+        dto.setCategories(product.getCategories().stream()
+                .map(CategoryMapper::toResponse)
+                .toList());
 
         return dto;
     }

@@ -2,9 +2,15 @@ package ec.edu.ups.icc.fundamentos01.categories.services;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
+
 import ec.edu.ups.icc.fundamentos01.categories.dtos.CategoryResponseDto;
 import ec.edu.ups.icc.fundamentos01.categories.dtos.CreateCategoryDto;
+import ec.edu.ups.icc.fundamentos01.categories.dtos.ProductFilterByCategoryDto;
 import ec.edu.ups.icc.fundamentos01.categories.dtos.UpdateCategoryDto;
+import ec.edu.ups.icc.fundamentos01.core.dtos.PaginationDto;
+import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
 
 /*
  * Contrato del servicio de categorías.
@@ -21,4 +27,18 @@ public interface CategoryService {
     CategoryResponseDto update(Long id, UpdateCategoryDto dto);
 
     void delete(Long id);
+
+    List<ProductResponseDto> findProductsByCategory(Long categoryId, ProductFilterByCategoryDto filters);
+
+    /*
+     * Productos de una categoría con filtros, usando Page.
+     */
+    Page<ProductResponseDto> findProductsByCategoryPage(
+            Long categoryId, ProductFilterByCategoryDto filters, PaginationDto pagination);
+
+    /*
+     * Productos de una categoría con filtros, usando Slice.
+     */
+    Slice<ProductResponseDto> findProductsByCategorySlice(
+            Long categoryId, ProductFilterByCategoryDto filters, PaginationDto pagination);
 }

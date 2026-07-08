@@ -1,5 +1,7 @@
 package ec.edu.ups.icc.fundamentos01.products.dtos;
 
+import java.util.Set;
+
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 
@@ -23,16 +25,16 @@ public class PartialUpdateProductDto {
     @Min(value = 0, message = "El stock debe ser mayor o igual a 0")
     private Integer stock;
 
-    private Long categoryId;
+    private Set<Long> categoryIds;
 
     public PartialUpdateProductDto() {
     }
 
-    public PartialUpdateProductDto(String name, Double price, Integer stock, Long categoryId) {
+    public PartialUpdateProductDto(String name, Double price, Integer stock, Set<Long> categoryIds) {
         this.name = name;
         this.price = price;
         this.stock = stock;
-        this.categoryId = categoryId;
+        this.categoryIds = categoryIds;
     }
 
     public String getName() {
@@ -59,11 +61,11 @@ public class PartialUpdateProductDto {
         this.stock = stock;
     }
 
-    public Long getCategoryId() {
-        return categoryId;
+    public Set<Long> getCategoryIds() {
+        return categoryIds;
     }
 
-    public void setCategoryId(Long categoryId) {
-        this.categoryId = categoryId;
+    public void setCategoryIds(Set<Long> categoryIds) {
+        this.categoryIds = categoryIds;
     }
 }

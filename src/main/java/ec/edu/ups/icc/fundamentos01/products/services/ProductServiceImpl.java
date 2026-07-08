@@ -1,13 +1,22 @@
 package ec.edu.ups.icc.fundamentos01.products.services;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import ec.edu.ups.icc.fundamentos01.categories.entities.CategoryEntity;
 import ec.edu.ups.icc.fundamentos01.categories.repositories.CategoryRepository;
+import ec.edu.ups.icc.fundamentos01.core.dtos.PaginationDto;
+import ec.edu.ups.icc.fundamentos01.core.exceptions.domain.BadRequestException;
 import ec.edu.ups.icc.fundamentos01.core.exceptions.domain.ConflictException;
 import ec.edu.ups.icc.fundamentos01.core.exceptions.domain.NotFoundException;
+import ec.edu.ups.icc.fundamentos01.core.pagination.PageableFactory;
 import ec.edu.ups.icc.fundamentos01.products.dtos.CreateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.PartialUpdateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
@@ -29,6 +38,13 @@ import ec.edu.ups.icc.fundamentos01.users.repositories.UserRepository;
  */
 @Service
 public class ProductServiceImpl implements ProductService {
+
+    /*
+     * Lista blanca de campos por los que sí se puede ordenar en la paginación.
+     * Solo campos directos de ProductEntity (no relaciones como owner o categories).
+     */
+    public static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "name", "price", "stock", "createdAt", "updatedAt");
 
     private final ProductRepository productRepository;
 
@@ -79,8 +95,8 @@ public class ProductServiceImpl implements ProductService {
     /*
      * Crea un nuevo producto: DTO -> Model -> Entity -> guarda -> Model -> Response DTO.
      *
-     * Valida que el usuario exista, que la categoría exista y que no exista
-     * ya un producto activo con el mismo nombre.
+     * Valida que el usuario exista, que todas las categorías existan y que no
+     * exista ya un producto activo con el mismo nombre.
      */
     @Override
     public ProductResponseDto create(CreateProductDto dto) {
@@ -91,12 +107,7 @@ public class ProductServiceImpl implements ProductService {
             throw new NotFoundException("User not found");
         }
 
-        CategoryEntity category = categoryRepository.findById(dto.getCategoryId())
-                .orElseThrow(() -> new NotFoundException("Category not found"));
-
-        if (category.isDeleted()) {
-            throw new NotFoundException("Category not found");
-        }
+        Set<CategoryEntity> categories = validateAndGetCategories(dto.getCategoryIds());
 
         if (productRepository.findByNameAndDeletedFalse(dto.getName()).isPresent()) {
             throw new ConflictException("Product name already registered");
@@ -105,7 +116,7 @@ public class ProductServiceImpl implements ProductService {
         ProductModel model = ProductMapper.toModelFromDTO(dto);
         ProductEntity entity = ProductMapper.toEntityFromModel(model);
         entity.setOwner(owner);
-        entity.setCategory(category);
+        entity.setCategories(categories);
 
         ProductEntity savedEntity = productRepository.save(entity);
         ProductModel savedModel = ProductMapper.toModelFromEntity(savedEntity);
@@ -116,7 +127,7 @@ public class ProductServiceImpl implements ProductService {
      * Actualiza completamente un producto activo.
      *
      * No permite cambiar el usuario propietario.
-     * Sí permite cambiar la categoría (valida que exista y no esté eliminada).
+     * Sí permite cambiar las categorías (reemplaza todas las asociadas).
      * Si el producto no existe o está eliminado, lanza NotFoundException.
      */
     @Override
@@ -128,17 +139,12 @@ public class ProductServiceImpl implements ProductService {
             throw new NotFoundException("Product not found");
         }
 
-        CategoryEntity category = categoryRepository.findById(dto.getCategoryId())
-                .orElseThrow(() -> new NotFoundException("Category not found"));
-
-        if (category.isDeleted()) {
-            throw new NotFoundException("Category not found");
-        }
+        Set<CategoryEntity> categories = validateAndGetCategories(dto.getCategoryIds());
 
         entity.setName(dto.getName());
         entity.setPrice(dto.getPrice());
         entity.setStock(dto.getStock());
-        entity.setCategory(category);
+        entity.setCategories(categories);
 
         ProductEntity savedEntity = productRepository.save(entity);
         ProductModel model = ProductMapper.toModelFromEntity(savedEntity);
@@ -148,7 +154,8 @@ public class ProductServiceImpl implements ProductService {
     /*
      * Actualiza parcialmente un producto activo: solo los campos enviados en el DTO.
      *
-     * Si llega categoryId, valida que la categoría exista y no esté eliminada.
+     * Si llegan categoryIds, valida que todas las categorías existan y
+     * reemplaza el conjunto completo de categorías asociadas.
      * Si el producto no existe o está eliminado, lanza NotFoundException.
      */
     @Override
@@ -169,15 +176,9 @@ public class ProductServiceImpl implements ProductService {
         if (dto.getStock() != null) {
             entity.setStock(dto.getStock());
         }
-        if (dto.getCategoryId() != null) {
-            CategoryEntity category = categoryRepository.findById(dto.getCategoryId())
-                    .orElseThrow(() -> new NotFoundException("Category not found"));
-
-            if (category.isDeleted()) {
-                throw new NotFoundException("Category not found");
-            }
-
-            entity.setCategory(category);
+        if (dto.getCategoryIds() != null) {
+            Set<CategoryEntity> categories = validateAndGetCategories(dto.getCategoryIds());
+            entity.setCategories(categories);
         }
 
         ProductEntity savedEntity = productRepository.save(entity);
@@ -238,10 +239,66 @@ public class ProductServiceImpl implements ProductService {
             throw new NotFoundException("Category not found");
         }
 
-        return productRepository.findByCategory_IdAndDeletedFalse(categoryId)
+        return productRepository.findByCategoryIdWithFilters(categoryId, null, null, null, null)
                 .stream()
                 .map(ProductMapper::toModelFromEntity)
                 .map(ProductMapper::toResponse)
                 .toList();
+    }
+
+    /*
+     * Retorna productos activos usando Page.
+     *
+     * Incluye metadatos completos: totalElements, totalPages, number, size, first, last.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponseDto> findAllPage(PaginationDto pagination) {
+        Pageable pageable = PageableFactory.build(pagination, ALLOWED_SORT_FIELDS);
+
+        return productRepository.findActivePage(pageable)
+                .map(ProductMapper::toModelFromEntity)
+                .map(ProductMapper::toResponse);
+    }
+
+    /*
+     * Retorna productos activos usando Slice.
+     *
+     * No incluye totalElements ni totalPages; es más liviano porque no ejecuta COUNT.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Slice<ProductResponseDto> findAllSlice(PaginationDto pagination) {
+        Pageable pageable = PageableFactory.build(pagination, ALLOWED_SORT_FIELDS);
+
+        return productRepository.findActiveSlice(pageable)
+                .map(ProductMapper::toModelFromEntity)
+                .map(ProductMapper::toResponse);
+    }
+
+    /*
+     * Valida que todas las categorías existan y estén activas.
+     *
+     * Retorna el conjunto de entidades CategoryEntity que se asociarán al producto.
+     */
+    private Set<CategoryEntity> validateAndGetCategories(Set<Long> categoryIds) {
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            throw new BadRequestException("Debe seleccionar al menos una categoría");
+        }
+
+        Set<CategoryEntity> categories = new HashSet<>();
+
+        for (Long categoryId : categoryIds) {
+            CategoryEntity category = categoryRepository.findById(categoryId)
+                    .orElseThrow(() -> new NotFoundException("Category not found"));
+
+            if (category.isDeleted()) {
+                throw new NotFoundException("Category not found");
+            }
+
+            categories.add(category);
+        }
+
+        return categories;
     }
 }

@@ -1,0 +1,18 @@
+meta {
+  name: 08 - List products Slice
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/products/slice?page=0&size=5&sortBy=createdAt&direction=desc
+  body: none
+  auth: none
+}
+
+params:query {
+  page: 0
+  size: 5
+  sortBy: createdAt
+  direction: desc
+}

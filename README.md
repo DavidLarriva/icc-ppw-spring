@@ -626,3 +626,177 @@ así que va a mano en el **Service**, con un `if` y un `throw`). Por eso `minPri
 maxPrice` se valida en `UserServiceImpl` y no en el DTO. También entendí que Bruno no
 "hace" el filtro: solo manda la URL con los query params, todo el trabajo real (recibirlos,
 validarlos, aplicarlos en el SQL) pasa en el backend.
+
+# Práctica 10 - Paginación (Page y Slice)
+
+Hasta ahora `GET /api/products` devolvía **todos** los productos de una sola vez. Con pocos
+registros no se nota, pero cargué ~20 000 productos de prueba y esa consulta empezó a tardar
+segundos y a devolver varios MB de JSON. La solución es **paginar**: que el cliente pida los
+datos de a pedazos.
+
+> Nota: desde la práctica 9 un producto tiene **varias** categorías (relación muchos a
+> muchos), por eso en las respuestas aparece `categories` como lista.
+
+## Endpoints nuevos
+
+Dejé el `GET /api/products` normal para comparar, y agregué dos versiones paginadas:
+
+```txt
+GET /api/products/page      -> con Page  (trae total de registros y de páginas)
+GET /api/products/slice     -> con Slice (más liviano, sin total)
+```
+
+Los dos aceptan los mismos parámetros por query:
+
+| Parámetro   | Qué hace                         | Por defecto |
+| ----------- | -------------------------------- | ----------- |
+| `page`      | Número de página (empieza en 0)  | `0`         |
+| `size`      | Cuántos registros por página     | `10`        |
+| `sortBy`    | Campo por el que ordenar         | `id`        |
+| `direction` | `asc` o `desc`                   | `asc`       |
+
+Ejemplos:
+
+```txt
+GET /api/products/page?page=0&size=5&sortBy=price&direction=desc
+GET /api/products/slice?page=0&size=5&sortBy=createdAt&direction=desc
+```
+
+## Cómo lo armé
+
+**Un DTO reutilizable** (`core/dtos/PaginationDto.java`) recibe `page`, `size`, `sortBy` y
+`direction` desde la URL, con validaciones (`@Min`, `@Max`) para que no manden una página
+negativa o un tamaño gigante.
+
+**Un helper compartido** (`core/pagination/PageableFactory.java`) arma el objeto `Pageable`
+de Spring y valida dos cosas a mano:
+
+- que `sortBy` esté en una **lista blanca** (`id`, `name`, `price`, `stock`, `createdAt`,
+  `updatedAt`) — así nadie ordena por un campo que no existe o por una relación;
+- que `direction` sea `asc` o `desc`.
+
+Lo puse en `core` para no repetir esa lógica: la usan tanto la paginación de productos como
+la de productos por categoría.
+
+**El repositorio** (`ProductRepository`) tiene las consultas paginadas con `@Query`. La de
+`Page` lleva además un `countQuery` (la consulta que cuenta el total); la de `Slice` no lo
+necesita:
+
+```java
+@Query(
+    value      = "SELECT p FROM ProductEntity p WHERE p.deleted = false",
+    countQuery = "SELECT COUNT(p) FROM ProductEntity p WHERE p.deleted = false"
+)
+Page<ProductEntity> findActivePage(Pageable pageable);
+
+@Query("SELECT p FROM ProductEntity p WHERE p.deleted = false")
+Slice<ProductEntity> findActiveSlice(Pageable pageable);
+```
+
+Spring Data traduce el `Pageable` a `LIMIT` / `OFFSET` / `ORDER BY` en el SQL, así que
+**la base de datos solo devuelve los registros de esa página**, no todos.
+
+## Carga masiva de datos
+
+Para poder probar la paginación con volumen creé `seed_data.sql`, que inserta 300 productos
+y los asocia a categorías. Se corre así:
+
+```bash
+docker exec -i postgres-dev psql -U ups -d devdb < seed_data.sql
+```
+
+## Diferencia entre Page y Slice
+
+| Aspecto                | Page                    | Slice                     |
+| ---------------------- | ----------------------- | ------------------------- |
+| Trae los datos         | Sí                      | Sí                        |
+| Trae `totalElements`   | Sí                      | No                        |
+| Trae `totalPages`      | Sí                      | No                        |
+| Ejecuta un `COUNT`     | Sí                      | No                        |
+| Para qué sirve         | Tablas con "Página X de N" | Scroll infinito / siguiente-anterior |
+
+### Respuesta con Page (evidencia)
+
+`GET /api/products/page?page=0&size=3&sortBy=price&direction=desc` — recortando el `content`,
+los metadatos son:
+
+```json
+{
+  "number": 0,
+  "size": 3,
+  "totalElements": 20300,
+  "totalPages": 6767,
+  "first": true,
+  "last": false
+}
+```
+
+![Respuesta con Page](assets/10-page.png)
+
+### Respuesta con Slice (evidencia)
+
+`GET /api/products/slice?page=0&size=3&sortBy=createdAt&direction=desc` — mismos datos, pero
+**no** aparecen `totalElements` ni `totalPages` (por eso es más rápido, no ejecuta el COUNT):
+
+```json
+{
+  "number": 0,
+  "size": 3,
+  "first": true,
+  "last": false
+}
+```
+
+![Respuesta con Slice](assets/10-slice.png)
+
+### Error por paginación inválida (evidencia)
+
+`GET /api/products/page?page=-1&size=0` responde `400` con el detalle por campo:
+
+```json
+{
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Datos de entrada inválidos",
+  "path": "/api/products/page",
+  "details": {
+    "page": "La página debe ser mayor o igual a 0",
+    "size": "El tamaño debe ser mayor o igual a 1"
+  }
+}
+```
+
+![Error de paginación](assets/10-page-invalid.png)
+
+## Actividad: categoría paginada
+
+Apliqué lo mismo al endpoint de productos por categoría (que ya existía desde la práctica 9).
+Dejé el normal y agregué las dos versiones paginadas, **manteniendo los filtros**
+(`name`, `minPrice`, `maxPrice`, `userId`):
+
+```txt
+GET /api/categories/{id}/products          (normal, ya existía)
+GET /api/categories/{id}/products/page     (nuevo, con Page)
+GET /api/categories/{id}/products/slice     (nuevo, con Slice)
+```
+
+Ejemplo `GET /api/categories/1/products/page?name=seed&page=0&size=5&sortBy=price&direction=desc`:
+
+![Categoría paginada](assets/10-categoria-page.png)
+
+> Las capturas van en una carpeta `assets/` junto al README; reemplazá las imágenes por tus
+> pantallazos de Bruno. Los bloques JSON de arriba son las respuestas reales que obtuve al
+> probar.
+
+## Lo que entendí
+
+**¿Diferencia entre Page y Slice?** Los dos te dan una porción de los datos, pero `Page`
+además ejecuta una segunda consulta (`COUNT`) para decirte cuántos registros y cuántas
+páginas hay en total — sirve para mostrar "Página 3 de 50". `Slice` no hace ese `COUNT`:
+solo sabe si hay una página siguiente, así que es más liviano y se usa para scroll infinito.
+
+**¿Por qué paginar en el repositorio y no después?** Porque si traigo los 20 000 productos
+a memoria y recién ahí corto 10, ya pagué el costo caro: la base de datos leyó todo, viajó
+todo por la red y el backend lo cargó completo. Paginar en el repositorio hace que el
+`LIMIT`/`OFFSET` viaje hasta PostgreSQL y **solo se lean y devuelvan esos 10 registros**. La
+paginación tiene sentido únicamente si ocurre en la consulta SQL, no en Java.

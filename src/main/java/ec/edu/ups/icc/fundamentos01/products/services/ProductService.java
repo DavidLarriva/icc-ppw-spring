@@ -2,6 +2,10 @@ package ec.edu.ups.icc.fundamentos01.products.services;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
+
+import ec.edu.ups.icc.fundamentos01.core.dtos.PaginationDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.CreateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.PartialUpdateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
@@ -28,4 +32,14 @@ public interface ProductService {
     List<ProductResponseDto> findByUserId(Long userId);
 
     List<ProductResponseDto> findByCategoryId(Long categoryId);
+
+    /*
+     * Retorna productos activos usando Page (incluye metadatos completos).
+     */
+    Page<ProductResponseDto> findAllPage(PaginationDto pagination);
+
+    /*
+     * Retorna productos activos usando Slice (más liviano, sin COUNT).
+     */
+    Slice<ProductResponseDto> findAllSlice(PaginationDto pagination);
 }
