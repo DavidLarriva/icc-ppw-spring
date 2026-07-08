@@ -1,0 +1,23 @@
+meta {
+  name: 04 - Register duplicate email (409)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/auth/register
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Ana Torres",
+    "email": "ana@example.com",
+    "password": "Secret123"
+  }
+}
