@@ -1,0 +1,15 @@
+meta {
+  name: 11 - List products invalid token (401)
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/products
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: invalid-token
+}

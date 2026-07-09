@@ -7,6 +7,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -108,6 +111,76 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .badRequest()
+                .body(response);
+    }
+
+    /*
+     * Maneja fallos de autenticación (por ejemplo, BadCredentialsException
+     * cuando AuthService.login() llama a AuthenticationManager.authenticate()
+     * con un email o contraseña incorrectos).
+     *
+     * Sin este handler, AuthenticationException caería en el handler
+     * genérico de Exception y respondería 500 en vez de 401.
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthenticationException(
+            AuthenticationException ex,
+            HttpServletRequest request
+    ) {
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.UNAUTHORIZED,
+                "Email o contraseña incorrectos",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(response);
+    }
+
+    /*
+     * Maneja AuthorizationDeniedException (Spring Security 6.x).
+     *
+     * Se lanza cuando un usuario autenticado no cumple la expresión de un
+     * @PreAuthorize (por ejemplo, ROLE_USER intentando entrar a un endpoint
+     * con hasRole('ADMIN')). Sin este handler cae en el genérico de
+     * Exception y responde 500 en vez de 403.
+     */
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAuthorizationDeniedException(
+            AuthorizationDeniedException ex,
+            HttpServletRequest request
+    ) {
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.FORBIDDEN,
+                "No tienes permisos para acceder a este recurso",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(response);
+    }
+
+    /*
+     * Maneja AccessDeniedException (legacy / lanzada manualmente).
+     *
+     * Fallback para validaciones de autorización hechas a mano en los
+     * servicios (por ejemplo, validar ownership de un recurso).
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDeniedException(
+            AccessDeniedException ex,
+            HttpServletRequest request
+    ) {
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.FORBIDDEN,
+                "Acceso denegado. No tienes los permisos necesarios",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
                 .body(response);
     }
 

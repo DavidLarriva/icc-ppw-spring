@@ -32,28 +32,17 @@ public class SecurityDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        roleRepository.findByName(RoleName.ROLE_USER)
-                .ifPresentOrElse(
-                        role -> logger.info("ROLE_USER ya existe"),
-                        () -> {
-                            RoleEntity userRole = new RoleEntity();
-                            userRole.setName(RoleName.ROLE_USER);
-                            userRole.setDescription("Usuario estándar con permisos básicos");
-                            roleRepository.save(userRole);
-                            logger.info("ROLE_USER creado");
-                        }
-                );
+        createRoleIfNotExists(RoleName.ROLE_USER, "Usuario estándar con permisos básicos");
+        createRoleIfNotExists(RoleName.ROLE_ADMIN, "Administrador con permisos completos");
+    }
 
-        roleRepository.findByName(RoleName.ROLE_ADMIN)
-                .ifPresentOrElse(
-                        role -> logger.info("ROLE_ADMIN ya existe"),
-                        () -> {
-                            RoleEntity adminRole = new RoleEntity();
-                            adminRole.setName(RoleName.ROLE_ADMIN);
-                            adminRole.setDescription("Administrador con permisos completos");
-                            roleRepository.save(adminRole);
-                            logger.info("ROLE_ADMIN creado");
-                        }
-                );
+    private void createRoleIfNotExists(RoleName roleName, String description) {
+        if (!roleRepository.existsByName(roleName)) {
+            RoleEntity role = new RoleEntity(roleName, description);
+            roleRepository.save(role);
+            logger.info("{} creado", roleName);
+        } else {
+            logger.info("{} ya existe", roleName);
+        }
     }
 }

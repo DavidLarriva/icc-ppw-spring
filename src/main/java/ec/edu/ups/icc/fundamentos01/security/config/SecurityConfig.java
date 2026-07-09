@@ -96,6 +96,7 @@ public class SecurityConfig {
                         // así que con el context-path /api la ruta real es /api/status.
                         .requestMatchers("/api/status/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
+                       // .requestMatchers("/users/**").permitAll()
 
                         .anyRequest().authenticated()
                 );

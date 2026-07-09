@@ -12,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import ec.edu.ups.icc.fundamentos01.core.exceptions.domain.BadRequestException;
 import ec.edu.ups.icc.fundamentos01.core.exceptions.domain.ConflictException;
 import ec.edu.ups.icc.fundamentos01.security.dtos.AuthResponseDto;
 import ec.edu.ups.icc.fundamentos01.security.dtos.LoginRequestDto;
@@ -90,7 +91,7 @@ public class AuthService {
      */
     @Transactional
     public AuthResponseDto register(RegisterRequestDto registerRequest) {
-        if (userRepository.findByEmail(registerRequest.getEmail()).isPresent()) {
+        if (userRepository.existsByEmail(registerRequest.getEmail())) {
             throw new ConflictException("El email ya está registrado");
         }
 
@@ -100,7 +101,7 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(registerRequest.getPassword()));
 
         RoleEntity userRole = roleRepository.findByName(RoleName.ROLE_USER)
-                .orElseThrow(() -> new RuntimeException("Rol ROLE_USER no encontrado"));
+                .orElseThrow(() -> new BadRequestException("Rol por defecto no encontrado"));
 
         Set<RoleEntity> roles = new HashSet<>();
         roles.add(userRole);

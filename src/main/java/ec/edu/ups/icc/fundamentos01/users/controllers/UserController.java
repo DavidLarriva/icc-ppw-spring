@@ -4,6 +4,7 @@ import java.util.List;
 
 import jakarta.validation.Valid;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -32,6 +33,7 @@ public class UserController {
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public List<UserResponseDto> findAll() {
         return userService.findAll();
     }

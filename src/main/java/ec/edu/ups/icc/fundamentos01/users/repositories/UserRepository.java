@@ -16,5 +16,14 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
 
     Optional<UserEntity> findByEmail(String email);
     Optional<UserEntity> findByIdAndDeletedFalse(Long id);
-    
+
+    /*
+     * Usado en el login: un usuario eliminado lógicamente no puede autenticarse.
+     */
+    Optional<UserEntity> findByEmailAndDeletedFalse(String email);
+
+    /*
+     * Usado en el registro para validar duplicados sin cargar la entidad completa.
+     */
+    boolean existsByEmail(String email);
 }

@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Slice;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -38,8 +39,12 @@ public class ProductController {
      * Endpoint normal. Se mantiene sin paginación para comparar con los paginados.
      *
      * GET /api/products
+     *
+     * Solo ADMIN: expone todos los productos de todos los usuarios sin filtrar,
+     * a diferencia de /page, /slice y /user/{userId} que sí puede usar cualquiera.
      */
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public List<ProductResponseDto> findAll() {
         return productService.findAll();
     }

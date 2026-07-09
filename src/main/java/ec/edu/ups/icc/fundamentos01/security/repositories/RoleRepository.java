@@ -16,4 +16,6 @@ import ec.edu.ups.icc.fundamentos01.security.enums.RoleName;
 public interface RoleRepository extends JpaRepository<RoleEntity, Long> {
 
     Optional<RoleEntity> findByName(RoleName name);
+
+    boolean existsByName(RoleName name);
 }
