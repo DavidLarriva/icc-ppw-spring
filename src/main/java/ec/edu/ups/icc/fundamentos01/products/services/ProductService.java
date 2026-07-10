@@ -10,6 +10,7 @@ import ec.edu.ups.icc.fundamentos01.products.dtos.CreateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.PartialUpdateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.UpdateProductDto;
+import ec.edu.ups.icc.fundamentos01.security.services.UserDetailsImpl;
 
 /*
  * Contrato del servicio de productos.
@@ -21,13 +22,27 @@ public interface ProductService {
 
     ProductResponseDto findOne(Long id);
 
-    ProductResponseDto create(CreateProductDto dto);
+    /*
+     * Crea un producto usando como owner al usuario autenticado (currentUser),
+     * nunca un userId recibido en el body.
+     */
+    ProductResponseDto create(CreateProductDto dto, UserDetailsImpl currentUser);
 
-    ProductResponseDto update(Long id, UpdateProductDto dto);
+    /*
+     * Actualiza completamente un producto. Se valida ownership en el servicio:
+     * solo el dueño o un ROLE_ADMIN pueden modificarlo.
+     */
+    ProductResponseDto update(Long id, UpdateProductDto dto, UserDetailsImpl currentUser);
 
-    ProductResponseDto partialUpdate(Long id, PartialUpdateProductDto dto);
+    /*
+     * Actualiza parcialmente un producto. Se valida ownership en el servicio.
+     */
+    ProductResponseDto partialUpdate(Long id, PartialUpdateProductDto dto, UserDetailsImpl currentUser);
 
-    void delete(Long id);
+    /*
+     * Elimina lógicamente un producto. Se valida ownership en el servicio.
+     */
+    void delete(Long id, UserDetailsImpl currentUser);
 
     List<ProductResponseDto> findByUserId(Long userId);
 

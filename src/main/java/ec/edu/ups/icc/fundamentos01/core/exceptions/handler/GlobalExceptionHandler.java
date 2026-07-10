@@ -165,17 +165,25 @@ public class GlobalExceptionHandler {
     /*
      * Maneja AccessDeniedException (legacy / lanzada manualmente).
      *
-     * Fallback para validaciones de autorización hechas a mano en los
-     * servicios (por ejemplo, validar ownership de un recurso).
+     * Se usa cuando un usuario autenticado no tiene permiso, por ejemplo al
+     * intentar modificar un producto ajeno (ver ProductServiceImpl.validateOwnership).
+     * Se reutiliza el mensaje de la excepción porque cada validación de
+     * ownership describe puntualmente qué se denegó.
      */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDeniedException(
             AccessDeniedException ex,
             HttpServletRequest request
     ) {
+        String message = ex.getMessage();
+
+        if (message == null || message.isBlank()) {
+            message = "Acceso denegado";
+        }
+
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.FORBIDDEN,
-                "Acceso denegado. No tienes los permisos necesarios",
+                message,
                 request.getRequestURI()
         );
 

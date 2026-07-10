@@ -800,3 +800,139 @@ a memoria y recién ahí corto 10, ya pagué el costo caro: la base de datos ley
 todo por la red y el backend lo cargó completo. Paginar en el repositorio hace que el
 `LIMIT`/`OFFSET` viaje hasta PostgreSQL y **solo se lean y devuelvan esos 10 registros**. La
 paginación tiene sentido únicamente si ocurre en la consulta SQL, no en Java.
+
+# Práctica 11 - Autenticación con JWT
+
+Hasta acá cualquiera podía pegarle a cualquier endpoint sin identificarse. Con esta práctica
+agregué login real: te registrás o iniciás sesión, te dan un **JWT**, y ese token es lo que
+demuestra quién sos en cada request que hagas después.
+
+## Endpoints nuevos
+
+```txt
+POST /api/auth/register   -> crea el usuario (rol ROLE_USER por defecto) y devuelve un token
+POST /api/auth/login      -> valida credenciales y devuelve un token
+```
+
+Los dos quedan públicos en `SecurityConfig` (`.requestMatchers("/auth/**").permitAll()`),
+porque sin login todavía no hay token que mandar.
+
+## El resto queda cerrado
+
+Agregué `.anyRequest().authenticated()` en `SecurityConfig`, así que **todo lo demás** ahora
+exige mandar el token:
+
+```txt
+Authorization: Bearer <token>
+```
+
+## Las piezas nuevas
+
+- **`JwtUtil`**: genera y valida el token (firma HS256, expira a los 30 min).
+- **`JwtAuthenticationFilter`**: corre en cada request; si el token es válido, deja al usuario
+  autenticado en el `SecurityContext` antes de que la petición llegue al controller.
+- **`JwtAuthenticationEntryPoint`**: responde el 401 cuando falta el token o es inválido. No
+  puede ser un `@RestControllerAdvice` normal porque esto pasa *antes* de llegar a un
+  controller.
+- **`AuthService`**: hace el trabajo real. Valida credenciales con `AuthenticationManager`,
+  guarda la contraseña hasheada con BCrypt (nunca en texto plano) y genera el token con
+  `JwtUtil`.
+
+## Probando
+
+Registro (devuelve el usuario creado y su token):
+
+```http
+POST /api/auth/register
+{
+  "name": "Ana Torres",
+  "email": "ana@example.com",
+  "password": "Secret123"
+}
+```
+
+![Registro exitoso](assets/11-register.png)
+
+Login con esas mismas credenciales:
+
+![Login exitoso](assets/11-login.png)
+
+Pegarle a un endpoint protegido sin token responde 401:
+
+```json
+{
+  "status": 401,
+  "message": "Token de autenticación inválido o no proporcionado..."
+}
+```
+
+![Sin token, 401](assets/11-sin-token.png)
+
+Con el token del login/registro, el mismo endpoint responde 200 normalmente:
+
+![Con token, 200](assets/11-con-token.png)
+
+# Práctica 12 - Roles y @PreAuthorize
+
+La práctica 11 resolvió "¿quién sos?". Esta resuelve "¿qué podés hacer?". No todo endpoint
+protegido debería estar abierto a cualquier usuario logueado: por ejemplo, ver **todos** los
+productos de **todos** los usuarios debería ser cosa de un ADMIN, no de cualquiera.
+
+## @PreAuthorize en los controllers
+
+`SecurityConfig` ya tenía `@EnableMethodSecurity(prePostEnabled = true)` desde la práctica 11
+(preparado a propósito), así que solo hizo falta anotar el método:
+
+```java
+@GetMapping
+@PreAuthorize("hasRole('ADMIN')")
+public List<ProductResponseDto> findAll() {
+    return productService.findAll();
+}
+```
+
+Hice lo mismo en `UserController.findAll()`. El resto de endpoints (paginados, por id, por
+usuario) se quedan solo con `.anyRequest().authenticated()`: cualquier usuario logueado puede
+usarlos, no hace falta ser ADMIN.
+
+## El problema del 500 en vez de 403
+
+Sin manejarla, cuando `@PreAuthorize` rechaza a alguien Spring tira una excepción que cae en
+el handler genérico de `GlobalExceptionHandler` y responde **500** en vez de **403**. Le
+agregué dos manejadores nuevos:
+
+```java
+@ExceptionHandler(AuthorizationDeniedException.class) // la lanza @PreAuthorize
+@ExceptionHandler(AccessDeniedException.class)         // para validaciones manuales (práctica 13)
+```
+
+## Cómo asignar ADMIN a un usuario
+
+No hay un endpoint para esto todavía (a propósito): se hace directo en la base, para que un
+usuario no pueda auto-promoverse:
+
+```sql
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.id, r.id FROM users u, roles r
+WHERE u.email = 'admin@example.com' AND r.name = 'ROLE_ADMIN';
+```
+
+Después de correr eso hay que volver a hacer login: el rol viaja dentro del JWT, así que el
+token viejo se queda con los roles de antes.
+
+## Probando
+
+Con un usuario normal (ROLE_USER) pegándole a `GET /api/products`:
+
+```json
+{
+  "status": 403,
+  "message": "No tienes permisos para acceder a este recurso"
+}
+```
+
+![403 para ROLE_USER](assets/12-forbidden-user.png)
+
+Con un usuario ADMIN, el mismo endpoint responde 200 con la lista completa de productos:
+
+![200 para ROLE_ADMIN](assets/12-ok-admin.png)

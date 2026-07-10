@@ -7,6 +7,8 @@ import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,7 @@ import ec.edu.ups.icc.fundamentos01.products.entities.ProductEntity;
 import ec.edu.ups.icc.fundamentos01.products.mappers.ProductMapper;
 import ec.edu.ups.icc.fundamentos01.products.models.ProductModel;
 import ec.edu.ups.icc.fundamentos01.products.repositories.ProductRepository;
+import ec.edu.ups.icc.fundamentos01.security.services.UserDetailsImpl;
 import ec.edu.ups.icc.fundamentos01.users.entities.UserEntity;
 import ec.edu.ups.icc.fundamentos01.users.repositories.UserRepository;
 
@@ -95,17 +98,14 @@ public class ProductServiceImpl implements ProductService {
     /*
      * Crea un nuevo producto: DTO -> Model -> Entity -> guarda -> Model -> Response DTO.
      *
-     * Valida que el usuario exista, que todas las categorías existan y que no
-     * exista ya un producto activo con el mismo nombre.
+     * El owner se obtiene del usuario autenticado (currentUser), nunca del body,
+     * para evitar que un usuario cree productos a nombre de otro.
+     * Valida que todas las categorías existan y que no exista ya un producto
+     * activo con el mismo nombre.
      */
     @Override
-    public ProductResponseDto create(CreateProductDto dto) {
-        UserEntity owner = userRepository.findById(dto.getUserId())
-                .orElseThrow(() -> new NotFoundException("User not found"));
-
-        if (owner.isDeleted()) {
-            throw new NotFoundException("User not found");
-        }
+    public ProductResponseDto create(CreateProductDto dto, UserDetailsImpl currentUser) {
+        UserEntity owner = findCurrentUserEntity(currentUser);
 
         Set<CategoryEntity> categories = validateAndGetCategories(dto.getCategoryIds());
 
@@ -126,18 +126,16 @@ public class ProductServiceImpl implements ProductService {
     /*
      * Actualiza completamente un producto activo.
      *
+     * Solo el dueño del producto o un ROLE_ADMIN pueden ejecutar esta operación.
      * No permite cambiar el usuario propietario.
      * Sí permite cambiar las categorías (reemplaza todas las asociadas).
      * Si el producto no existe o está eliminado, lanza NotFoundException.
      */
     @Override
-    public ProductResponseDto update(Long id, UpdateProductDto dto) {
-        ProductEntity entity = productRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Product not found"));
+    public ProductResponseDto update(Long id, UpdateProductDto dto, UserDetailsImpl currentUser) {
+        ProductEntity entity = findActiveProductOrThrow(id);
 
-        if (entity.isDeleted()) {
-            throw new NotFoundException("Product not found");
-        }
+        validateOwnership(entity, currentUser);
 
         Set<CategoryEntity> categories = validateAndGetCategories(dto.getCategoryIds());
 
@@ -154,18 +152,16 @@ public class ProductServiceImpl implements ProductService {
     /*
      * Actualiza parcialmente un producto activo: solo los campos enviados en el DTO.
      *
+     * Solo el dueño del producto o un ROLE_ADMIN pueden ejecutar esta operación.
      * Si llegan categoryIds, valida que todas las categorías existan y
      * reemplaza el conjunto completo de categorías asociadas.
      * Si el producto no existe o está eliminado, lanza NotFoundException.
      */
     @Override
-    public ProductResponseDto partialUpdate(Long id, PartialUpdateProductDto dto) {
-        ProductEntity entity = productRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Product not found"));
+    public ProductResponseDto partialUpdate(Long id, PartialUpdateProductDto dto, UserDetailsImpl currentUser) {
+        ProductEntity entity = findActiveProductOrThrow(id);
 
-        if (entity.isDeleted()) {
-            throw new NotFoundException("Product not found");
-        }
+        validateOwnership(entity, currentUser);
 
         if (dto.getName() != null) {
             entity.setName(dto.getName());
@@ -189,16 +185,14 @@ public class ProductServiceImpl implements ProductService {
     /*
      * Elimina lógicamente un producto activo: marca deleted = true sin borrar el registro.
      *
+     * Solo el dueño del producto o un ROLE_ADMIN pueden ejecutar esta operación.
      * Si no existe o ya está eliminado, lanza NotFoundException.
      */
     @Override
-    public void delete(Long id) {
-        ProductEntity entity = productRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Product not found"));
+    public void delete(Long id, UserDetailsImpl currentUser) {
+        ProductEntity entity = findActiveProductOrThrow(id);
 
-        if (entity.isDeleted()) {
-            throw new NotFoundException("Product not found");
-        }
+        validateOwnership(entity, currentUser);
 
         entity.setDeleted(true);
         productRepository.save(entity);
@@ -274,6 +268,72 @@ public class ProductServiceImpl implements ProductService {
         return productRepository.findActiveSlice(pageable)
                 .map(ProductMapper::toModelFromEntity)
                 .map(ProductMapper::toResponse);
+    }
+
+    /*
+     * Busca un producto activo por id.
+     *
+     * Si no existe o está eliminado, lanza NotFoundException.
+     */
+    private ProductEntity findActiveProductOrThrow(Long id) {
+        ProductEntity entity = productRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Product not found"));
+
+        if (entity.isDeleted()) {
+            throw new NotFoundException("Product not found");
+        }
+
+        return entity;
+    }
+
+    /*
+     * Obtiene el usuario autenticado como entidad JPA.
+     *
+     * currentUser viene del token JWT. Se vuelve a consultar en base para
+     * asegurar que el usuario siga existiendo y no esté eliminado lógicamente.
+     */
+    private UserEntity findCurrentUserEntity(UserDetailsImpl currentUser) {
+        if (currentUser == null) {
+            throw new AccessDeniedException("Usuario no autenticado");
+        }
+
+        return userRepository.findByIdAndDeletedFalse(currentUser.getId())
+                .orElseThrow(() -> new AccessDeniedException("Usuario no autorizado"));
+    }
+
+    /*
+     * Valida si el usuario autenticado puede modificar o eliminar el producto.
+     *
+     * ROLE_ADMIN puede modificar cualquier producto.
+     * ROLE_USER solo puede modificar productos propios.
+     */
+    private void validateOwnership(ProductEntity product, UserDetailsImpl currentUser) {
+        if (currentUser == null) {
+            throw new AccessDeniedException("Usuario no autenticado");
+        }
+
+        if (hasRole(currentUser, "ROLE_ADMIN")) {
+            return;
+        }
+
+        if (product.getOwner() == null || product.getOwner().getId() == null) {
+            throw new AccessDeniedException("El producto no tiene propietario válido");
+        }
+
+        if (!product.getOwner().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("No puedes modificar productos ajenos");
+        }
+    }
+
+    /*
+     * Verifica si el usuario autenticado tiene un rol específico
+     * (por ejemplo, "ROLE_ADMIN").
+     */
+    private boolean hasRole(UserDetailsImpl user, String role) {
+        return user.getAuthorities()
+                .stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(authority -> authority.equals(role));
     }
 
     /*

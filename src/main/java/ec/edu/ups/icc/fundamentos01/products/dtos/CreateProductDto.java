@@ -5,15 +5,16 @@ import java.util.Set;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /*
  * DTO utilizado para recibir del cliente los datos necesarios
  * para crear un nuevo producto.
  *
- * Incluye userId y categoryIds porque el producto debe relacionarse
- * con un usuario y con al menos una categoría existentes.
+ * Incluye categoryIds porque el producto debe relacionarse con al menos
+ * una categoría existente. No incluye userId: el owner se obtiene del
+ * usuario autenticado (JWT), nunca del body, para evitar que un usuario
+ * cree productos a nombre de otro.
  * No incluye id (lo genera el servidor).
  * No incluye createdAt (lo asigna el servidor).
  */
@@ -29,20 +30,16 @@ public class CreateProductDto {
     @Min(value = 0, message = "El stock debe ser mayor o igual a 0")
     private int stock;
 
-    @NotNull(message = "El ID del usuario es obligatorio")
-    private Long userId;
-
     @NotEmpty(message = "Debe seleccionar al menos una categoría")
     private Set<Long> categoryIds;
 
     public CreateProductDto() {
     }
 
-    public CreateProductDto(String name, double price, int stock, Long userId, Set<Long> categoryIds) {
+    public CreateProductDto(String name, double price, int stock, Set<Long> categoryIds) {
         this.name = name;
         this.price = price;
         this.stock = stock;
-        this.userId = userId;
         this.categoryIds = categoryIds;
     }
 
@@ -68,14 +65,6 @@ public class CreateProductDto {
 
     public void setStock(int stock) {
         this.stock = stock;
-    }
-
-    public Long getUserId() {
-        return userId;
-    }
-
-    public void setUserId(Long userId) {
-        this.userId = userId;
     }
 
     public Set<Long> getCategoryIds() {
