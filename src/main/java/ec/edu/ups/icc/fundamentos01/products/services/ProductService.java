@@ -54,7 +54,9 @@ public interface ProductService {
     Page<ProductResponseDto> findAllPage(PaginationDto pagination);
 
     /*
-     * Retorna productos activos usando Slice (más liviano, sin COUNT).
+     * Retorna, usando Slice (más liviano, sin COUNT), únicamente los
+     * productos activos del usuario autenticado. El filtro por owner se
+     * aplica en el repositorio, no en este método.
      */
-    Slice<ProductResponseDto> findAllSlice(PaginationDto pagination);
+    Slice<ProductResponseDto> findAllSlice(PaginationDto pagination, UserDetailsImpl currentUser);
 }

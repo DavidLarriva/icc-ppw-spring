@@ -7,6 +7,7 @@ build/
 
 ### STS ###
 .apt_generated
+.claude/
 .classpath
 .factorypath
 .project
@@ -36,8 +37,8 @@ out/
 ### VS Code ###
 .vscode/
 
-### Claude Code ###
-.claude/
+
+
 
 ### macOS ###
 .DS_Store

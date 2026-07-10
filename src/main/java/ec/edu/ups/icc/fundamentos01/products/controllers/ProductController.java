@@ -66,12 +66,19 @@ public class ProductController {
     /*
      * Endpoint paginado usando Slice (más liviano, sin COUNT).
      *
+     * Cualquier usuario autenticado puede usarlo, pero solo ve SUS propios
+     * productos: el filtro por owner se resuelve en el repositorio a partir
+     * del usuario del token, no de un parámetro que mande el cliente.
+     *
      * GET /api/products/slice
      * GET /api/products/slice?page=0&size=5&sortBy=createdAt&direction=desc
      */
     @GetMapping("/slice")
-    public Slice<ProductResponseDto> findAllSlice(@Valid @ModelAttribute PaginationDto pagination) {
-        return productService.findAllSlice(pagination);
+    public Slice<ProductResponseDto> findAllSlice(
+            @Valid @ModelAttribute PaginationDto pagination,
+            @AuthenticationPrincipal UserDetailsImpl currentUser
+    ) {
+        return productService.findAllSlice(pagination, currentUser);
     }
 
     @GetMapping("/{id}")

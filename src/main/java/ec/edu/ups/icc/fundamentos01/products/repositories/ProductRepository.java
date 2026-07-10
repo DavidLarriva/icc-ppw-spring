@@ -97,16 +97,22 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
     Page<ProductEntity> findActivePage(Pageable pageable);
 
     /*
-     * Consulta productos activos usando Slice.
+     * Consulta productos activos de un usuario usando Slice.
      *
      * Slice no ejecuta COUNT: solo sabe si hay página siguiente.
+     *
+     * El filtro por owner va en el WHERE, no después en Java: así la base de
+     * datos solo lee y devuelve las filas de ese usuario (LIMIT/OFFSET
+     * aplicado ya sobre el subconjunto filtrado), en vez de traer todos los
+     * productos a memoria y recién ahí descartar los que no son suyos.
      */
     @Query("""
             SELECT p
             FROM ProductEntity p
             WHERE p.deleted = false
+              AND p.owner.id = :userId
             """)
-    Slice<ProductEntity> findActiveSlice(Pageable pageable);
+    Slice<ProductEntity> findActiveSliceByOwnerId(@Param("userId") Long userId, Pageable pageable);
 
     /*
      * Productos activos de una categoría con filtros opcionales, usando Page.

@@ -256,16 +256,20 @@ public class ProductServiceImpl implements ProductService {
     }
 
     /*
-     * Retorna productos activos usando Slice.
+     * Retorna, usando Slice, solo los productos activos del usuario autenticado.
      *
+     * El filtro por owner va en la consulta del repositorio (findActiveSliceByOwnerId),
+     * no acá: así el LIMIT/OFFSET de la paginación se aplica ya sobre las filas de
+     * ese usuario, en vez de traer todos los productos a memoria y filtrar en Java.
      * No incluye totalElements ni totalPages; es más liviano porque no ejecuta COUNT.
      */
     @Override
     @Transactional(readOnly = true)
-    public Slice<ProductResponseDto> findAllSlice(PaginationDto pagination) {
+    public Slice<ProductResponseDto> findAllSlice(PaginationDto pagination, UserDetailsImpl currentUser) {
         Pageable pageable = PageableFactory.build(pagination, ALLOWED_SORT_FIELDS);
+        UserEntity owner = findCurrentUserEntity(currentUser);
 
-        return productRepository.findActiveSlice(pageable)
+        return productRepository.findActiveSliceByOwnerId(owner.getId(), pageable)
                 .map(ProductMapper::toModelFromEntity)
                 .map(ProductMapper::toResponse);
     }
