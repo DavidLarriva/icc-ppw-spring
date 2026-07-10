@@ -1,34 +1,43 @@
 # Prácticas Spring Boot - fundamentos01
 
-Proyecto de la materia Programación y Plataformas Web (UPS). Sobre el mismo proyecto voy
-agregando cada práctica.
+Proyecto de la materia Programación y Plataformas Web (UPS).
 
 ## Datos del proyecto
 
 - Group: `ec.edu.ups.icc`
 - Artifact: `fundamentos01`
-- Java 25, Gradle (Groovy), Spring Boot 4.1.0
-- Dependencias: Spring Web (`spring-boot-starter-webmvc`) y Spring Boot DevTools
+- Java 25
+- Gradle (Groovy)
+- Spring Boot 4.1.0
+- Dependencias:
+  - Spring Web
+  - Spring Boot DevTools
 
-## Cómo correrlo
+## Ejecutar el proyecto
 
 ```bash
 ./gradlew bootRun
 ```
 
-Arranca un Tomcat embebido en el puerto 8080. En `application.yml` dejé una ruta base
-`/api`, así que todos los endpoints cuelgan de ahí.
+La aplicación inicia en el puerto **8080**.
+
+En `application.yml` se configuró la ruta base `/api`.
 
 ---
 
 # Práctica 01 - Configuración
 
-Dejar el entorno listo (Java + Gradle + Spring Boot) y levantar un primer endpoint de
-estado.
+## Objetivo
 
-```
+Configurar el proyecto y comprobar que spring funciona correctamente.
+
+### Endpoint
+
+```text
 GET http://localhost:8080/api/api/status
 ```
+
+Respuesta:
 
 ```json
 {
@@ -38,25 +47,37 @@ GET http://localhost:8080/api/api/status
 }
 ```
 
-> Nota: la ruta queda con `/api` doble porque al `context-path: /api` se le suma el
-> `@GetMapping("/api/status")` del controlador.
+> La ruta queda como `/api/api/status` porque se usa `context-path: /api` y el controller también tiene `/api/status`.
 
 ---
 
 # Práctica 02 - Estructura del proyecto
 
-Organizar el código en paquetes por dominio. Agregué un módulo `students` con su
-controlador y su modelo en carpetas separadas.
+## Objetivo
 
+Organizar el proyecto por paquetes y crear el módulo **students**.
+
+### Endpoints
+
+```text
+GET /api/students
+GET /api/students/count
 ```
-GET http://localhost:8080/api/students          -> lista de estudiantes
-GET http://localhost:8080/api/students/count     -> cantidad de estudiantes
-```
+
+Respuesta:
 
 ```json
 [
-  { "id": 2, "name": "Juan", "age": "30" },
-  { "id": 1, "name": "Diego", "age": "10" }
+  {
+    "id": 2,
+    "name": "Juan",
+    "age": "30"
+  },
+  {
+    "id": 1,
+    "name": "Diego",
+    "age": "10"
+  }
 ]
 ```
 
@@ -64,162 +85,155 @@ GET http://localhost:8080/api/students/count     -> cantidad de estudiantes
 
 # Práctica 03 - API REST
 
-CRUD REST completo, en memoria (sin servicios ni base de datos todavía), usando DTOs,
-modelo y un mapper. Lo hice para `users` y lo repliqué para `products`.
+## Objetivo
+
+Crear un CRUD para **users** y **products** usando dto, model y mapper. En esta práctica los datos todavía se guardan en memoria.
 
 ## Endpoints
 
-Mismos 6 métodos para cada recurso (`/users` y `/products`):
+### Users
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/api/users` | Lista todos |
-| GET | `/api/users/{id}` | Uno por id |
-| POST | `/api/users` | Crea (id autogenerado) |
-| PUT | `/api/users/{id}` | Reemplaza todo |
-| PATCH | `/api/users/{id}` | Actualiza solo lo que llega |
-| DELETE | `/api/users/{id}` | Elimina |
+| Método | Ruta |
+|---------|------|
+| GET | `/api/users` |
+| GET | `/api/users/{id}` |
+| POST | `/api/users` |
+| PUT | `/api/users/{id}` |
+| PATCH | `/api/users/{id}` |
+| DELETE | `/api/users/{id}` |
 
-Para productos es igual cambiando `/users` por `/products`.
+Para **products** son los mismos endpoints cambiando `/users` por `/products`.
 
-## Ejemplos
+## Crear usuario
 
-Crear un usuario:
-
-```
+```http
 POST /api/users
-{ "name": "Ana", "email": "ana@ups.edu.ec", "password": "1234" }
 ```
 
 ```json
-{ "id": 1, "name": "Ana", "email": "ana@ups.edu.ec" }
+{
+  "name": "Ana",
+  "email": "ana@ups.edu.ec",
+  "password": "1234"
+}
 ```
 
-La respuesta nunca devuelve `password` ni `passwordHash`. Si el id no existe, responde
-`404` con un mensaje:
+Respuesta:
 
 ```json
-{ "message": "Usuario no encontrado con id 99" }
+{
+  "id": 1,
+  "name": "Ana",
+  "email": "ana@ups.edu.ec"
+}
 ```
 
-Un producto tiene `id`, `name`, `price`, `stock`:
+Si el usuario no existe:
 
 ```json
-{ "id": 1, "name": "Teclado", "price": 25.5, "stock": 10 }
+{
+  "message": "Usuario no encontrado con id 99"
+}
 ```
 
-## Estructura (por recurso)
+Ejemplo de producto:
 
+```json
+{
+  "id": 1,
+  "name": "Teclado",
+  "price": 25.5,
+  "stock": 10
+}
 ```
+
+## Estructura
+
+```text
 users/
-├── controllers/UserController.java   Los 6 endpoints
-├── dtos/                             CreateUserDto, UpdateUserDto, PartialUpdateUserDto, UserResponseDto
-├── models/UserModel.java             Datos internos del usuario
-└── mappers/UserMapper.java           DTO <-> modelo (genera passwordHash y createdAt)
+├── controllers/UserController.java
+├── dtos/
+├── models/UserModel.java
+└── mappers/UserMapper.java
 ```
 
-`products/` tiene la misma estructura.
-
-## Lo que entendí
-
-Cada recurso separa lo que entra (los DTOs `Create`/`Update`/`PartialUpdate`) de lo que
-sale (`ResponseDto`), y el modelo interno queda escondido. El mapper es el que traduce
-entre ellos, así no expongo datos sensibles como la contraseña.
-
-El controlador guarda los registros en una lista en memoria y genera los ids con un
-contador. Con `ResponseEntity` controlo el código HTTP: `201` al crear, `200` al
-consultar o actualizar, `204` al eliminar y `404` cuando el id no existe. La diferencia
-entre `PUT` y `PATCH` es que PUT reemplaza todos los campos y PATCH solo cambia los que
-llegan con valor.
+`products` tiene la misma estructura.
 
 ---
 
 # Práctica 04 - Controladores y servicios
 
-Saqué la lógica de los controladores y la moví a una capa de **servicios**. Ahora el
-controlador solo recibe la petición y se la pasa al servicio; el servicio es el que hace
-el trabajo (buscar, crear, actualizar, borrar) sobre la lista en memoria.
+## Objetivo
 
-## Cómo se conecta
+Separar la lógica del controller y moverla a la capa de servicios.
 
-- El servicio se marca con `@Service` para que Spring lo cree y lo administre.
-- El controlador lo recibe por el **constructor** (inyección de dependencias): no hace
-  `new` del servicio, lo pone Spring solo.
+Ahora el controller solo recibe la petición y llama al servicio.
+
+## Ejemplo
 
 ```java
 @RestController
 @RequestMapping("/users")
 public class UserController {
-    private final UserService userService;            // la interfaz
 
-    public UserController(UserService userService) {  // Spring inyecta UserServiceImpl
+    private final UserService userService;
+
+    public UserController(UserService userService) {
         this.userService = userService;
     }
 
     @GetMapping
     public List<UserResponseDto> findAll() {
-        return userService.findAll();                 // solo delega
+        return userService.findAll();
     }
 }
 ```
 
-## Estructura nueva (por recurso)
+## Nueva estructura
 
-```
+```text
 users/
-├── controllers/UserController.java   Solo recibe y delega
+├── controllers/
 ├── services/
-│   ├── UserService.java              Interfaz: qué se puede hacer
-│   └── UserServiceImpl.java          @Service: la lógica + la lista en memoria
-├── dtos/  models/  mappers/          igual que antes
+│   ├── UserService.java
+│   └── UserServiceImpl.java
+├── dtos/
+├── models/
+└── mappers/
 ```
 
-`products/` se replicó igual (`ProductService` + `ProductServiceImpl`).
+`products` utiliza la misma estructura.
 
-Los endpoints son los mismos de la Práctica 03; la diferencia es interna. Cuando algo no
-se encuentra, el servicio devuelve un `ErrorResponseDto` con un mensaje (los códigos HTTP
-correctos llegan en la Práctica 07).
-
-## Lo que entendí
-
-El **servicio** es la clase que hace el trabajo de verdad; el **controlador** es solo la
-puerta de entrada. Separarlos (cada uno con una sola responsabilidad) deja el código más
-ordenado y listo para cuando se conecte una base de datos. La **inyección de
-dependencias** es que yo solo pido `UserService` en el constructor y Spring me entrega la
-implementación (`UserServiceImpl`, la marcada con `@Service`) sin que yo la cree a mano.
-
----
+Los endpoints siguen siendo los mismos de la práctica anterior.
 
 # Práctica 05 - Persistencia con PostgreSQL y JPA
 
-Reemplacé la lista en memoria de `users` por una base de datos real: PostgreSQL corriendo
-en Docker, conectado con Spring Data JPA + Hibernate.
+## Objetivo
 
-## Cómo se conecta
+Guardar la información en **postgresql** usando **spring data jpa**.
 
-- Levanté un contenedor `postgres-dev` con Docker (PostgreSQL 16) y una base `devdb`.
-- En `application.yml` agregué los datos de conexión (`url`, `username`, `password`) y
-  `ddl-auto: update`, para que Hibernate cree/actualice las tablas solo.
-- Agregué las dependencias `spring-boot-starter-data-jpa` y el driver `postgresql`.
+## Configuración
 
-## Piezas nuevas (por recurso)
+- Se creó un contenedor de docker con PostgreSQL.
+- Se configuró la conexión en `application.yml`.
+- Se agregaron las dependencias de JPA y PostgreSQL.
 
-```
+## Archivos nuevos
+
+```text
 core/
-└── entities/BaseEntity.java          id, createdAt, updatedAt, deleted (compartido)
+└── entities/BaseEntity.java
 
 users/
-├── entities/UserEntity.java          @Entity, mapea la tabla "users"
-└── repositories/UserRepository.java  extiende JpaRepository<UserEntity, Long>
+├── entities/UserEntity.java
+└── repositories/UserRepository.java
 ```
 
-`UserMapper` ahora también convierte `Model <-> Entity`, además de `Dto <-> Model` que ya
-tenía.
+El `UserMapper` también convierte entre **Model** y **Entity**.
 
-## Cómo cambió el servicio
+## Cambios en el servicio
 
-`UserServiceImpl` ya no tiene una `List<UserModel>`: usa `UserRepository`, que Spring
-inyecta por el constructor igual que el servicio en la Práctica 04.
+Ahora el servicio usa `UserRepository` en lugar de una lista en memoria.
 
 ```java
 private final UserRepository userRepository;
@@ -229,47 +243,39 @@ public UserServiceImpl(UserRepository userRepository) {
 }
 ```
 
-Cada método llama a `userRepository` (`save`, `findById`, `findAll`) en vez de manipular
-una lista. Si no existe el id, lanza un error simple (`IllegalStateException`); el manejo
-de errores prolijo llega en una práctica posterior. El `delete` ya no borra la fila: solo
-marca `deleted = true` (borrado lógico).
+Los métodos utilizan `save()`, `findById()` y `findAll()`.
 
-## Probando que persiste de verdad
+El borrado es lógico usando el campo `deleted`.
+
+## Verificación
 
 ```bash
 docker exec -it postgres-dev psql -U ups -d devdb -c "SELECT * FROM users;"
 ```
 
-Si reinicio la aplicación, los usuarios siguen ahí (antes, con la lista en memoria, se
-perdían).
-
-## Lo que entendí
-
-El **repositorio** reemplaza por completo la lista en memoria: con `JpaRepository` ya
-tengo `save`, `findById`, `findAll`, `delete`, etc. sin escribir SQL. La diferencia entre
-**Entity** y **Model** es que la Entity sabe cómo se guarda en la tabla (tiene anotaciones
-de JPA) y el Model es solo la representación interna de la aplicación; nunca se debe
-exponer la Entity directamente al cliente. `BaseEntity` evita repetir `id`,
-`createdAt`, `updatedAt` y `deleted` en cada entidad nueva.
+---
 
 # Práctica 06 - Validación de DTOs
 
-Antes de esta práctica, un `POST /users` con `name` vacío o `email` mal escrito se
-guardaba igual en la base de datos. Ahora los DTOs de entrada validan el formato de los
-datos antes de que lleguen al servicio.
+## Objetivo
 
-## Dependencia nueva
+Validar los datos antes de guardarlos.
 
-Agregué `spring-boot-starter-validation` en `build.gradle` (Jakarta Validation).
+## Dependencia
 
-## Anotaciones en los DTOs
+Se agregó:
 
-En `CreateUserDto`, `UpdateUserDto`, `PartialUpdateUserDto` (y sus equivalentes en
-`products`) agregué reglas con anotaciones de Jakarta:
+```text
+spring-boot-starter-validation
+```
+
+## Validaciones
+
+Ejemplo en los dto:
 
 ```java
 @NotBlank(message = "El nombre es obligatorio")
-@Size(min = 3, max = 150, message = "El nombre debe tener entre 3 y 150 caracteres")
+@Size(min = 3, max = 150)
 private String name;
 
 @NotBlank(message = "El email es obligatorio")
@@ -277,17 +283,17 @@ private String name;
 private String email;
 ```
 
-En los DTOs de actualización parcial (`PartialUpdateUserDto`, `PartialUpdateProductDto`)
-no usé `@NotBlank`/`@NotNull`, porque ahí los campos son opcionales: solo se valida el
-formato del campo que sí llega.
+Para productos también se agregaron validaciones como:
 
-En `products` agregué `@Min(0)` para `price` y `stock`, porque no tiene sentido un precio
-o stock negativo.
+```java
+@Min(0)
+private Double price;
 
-## Activar la validación en el controller
+@Min(0)
+private Integer stock;
+```
 
-Sin `@Valid`, las anotaciones del DTO no se ejecutan. Hay que agregarlo en cada
-`@RequestBody`:
+## Activar la validación
 
 ```java
 @PostMapping
@@ -296,12 +302,9 @@ public UserResponseDto create(@Valid @RequestBody CreateUserDto dto) {
 }
 ```
 
-Hice lo mismo en `update` y `partialUpdate`, en `UserController` y en `ProductController`.
+## Validaciones en el servicio
 
-## Validación de negocio en el servicio
-
-La validación del DTO solo revisa el formato. Que el email ya esté registrado es una
-regla de negocio, así que la agregué en `UserServiceImpl.create`:
+También se valida que el correo no exista.
 
 ```java
 if (userRepository.findByEmail(dto.getEmail()).isPresent()) {
@@ -309,271 +312,222 @@ if (userRepository.findByEmail(dto.getEmail()).isPresent()) {
 }
 ```
 
-Repliqué la misma idea en `products`: agregué `findByName` en `ProductRepository` y
-valido que no exista ya un producto activo con ese nombre antes de crear uno nuevo.
+En products también se valida que no exista otro producto con el mismo nombre.
 
-## Lo que entendí
-
-Hay dos niveles de validación bien distintos: el **DTO** valida formato (¿el campo viene,
-tiene el tamaño correcto, el email tiene forma de email?) sin tocar la base de datos; el
-**servicio** valida reglas de negocio (¿ya existe ese email?, ¿ya existe ese nombre de
-producto?), que sí necesitan consultar el repositorio. El DTO no debería depender de la
-base de datos, y el servicio no debería repetir validaciones de formato que ya hizo el DTO.
+---
 
 # Práctica 07 - Manejo global de errores
 
-Antes de esta práctica, cuando un usuario no existía se lanzaba `IllegalStateException`,
-que Spring traduce en un `500 Internal Server Error` con el stacktrace visible. Eso es
-incorrecto: un recurso inexistente debería responder `404`, no un error interno.
+## Objetivo
 
-## Excepciones propias
+Responder errores con un formato único.
 
-Creé el paquete `core/exceptions/` con esta estructura:
+## Estructura
 
-```
+```text
 core/exceptions/
-├── base/ApplicationException.java      excepción abstracta, guarda un HttpStatus
+├── base/ApplicationException.java
 ├── domain/
-│   ├── NotFoundException.java          -> 404
-│   ├── ConflictException.java          -> 409
-│   └── BadRequestException.java        -> 400
-├── response/ErrorResponse.java         formato único de error (timestamp, status, error, message, path, details)
-└── handler/GlobalExceptionHandler.java @RestControllerAdvice
+│   ├── NotFoundException.java
+│   ├── ConflictException.java
+│   └── BadRequestException.java
+├── response/ErrorResponse.java
+└── handler/GlobalExceptionHandler.java
 ```
 
-`ApplicationException` es abstracta y guarda el `HttpStatus` asociado; `NotFoundException`,
-`ConflictException` y `BadRequestException` solo llaman al constructor con su status fijo.
-
-## El handler global
-
-`GlobalExceptionHandler` usa `@RestControllerAdvice` para capturar excepciones de
-**cualquier** controller, sin que cada uno tenga que hacer `try/catch`:
+## Handler
 
 ```java
 @ExceptionHandler(ApplicationException.class)
 public ResponseEntity<ErrorResponse> handleApplicationException(
-        ApplicationException ex, HttpServletRequest request) {
+        ApplicationException ex,
+        HttpServletRequest request) {
+
     return ResponseEntity.status(ex.getStatus())
-            .body(new ErrorResponse(ex.getStatus(), ex.getMessage(), request.getRequestURI()));
+            .body(new ErrorResponse(
+                    ex.getStatus(),
+                    ex.getMessage(),
+                    request.getRequestURI()));
 }
 ```
 
-También tiene un handler para `MethodArgumentNotValidException` (cuando falla `@Valid`,
-de la Práctica 06) que arma el campo `details` con el error de cada campo, y un handler
-genérico para `Exception` que evita exponer stacktraces al cliente y devuelve `500`.
+También se agregó manejo para:
 
-## Reemplazo en los servicios
+- `MethodArgumentNotValidException`
+- `Exception`
 
-En `UserServiceImpl` y `ProductServiceImpl` cambié todos los
-`throw new IllegalStateException(...)` por:
+## Cambios
+
+En los servicios se reemplazó:
+
+```java
+throw new IllegalStateException(...)
+```
+
+por
 
 ```java
 .orElseThrow(() -> new NotFoundException("User not found"));
 ```
 
-y agregué una validación extra: si la entidad existe pero tiene `deleted = true`, también
-lanza `NotFoundException` (un registro borrado lógicamente no debería poder consultarse,
-actualizarse ni eliminarse de nuevo). También hice que `findAll` filtre `deleted = true`,
-para que un producto/usuario eliminado no aparezca en los listados.
+Los registros con `deleted = true` ya no se muestran.
 
-Email duplicado en `users` y nombre duplicado en `products` ahora lanzan
-`ConflictException` (409) en vez de un error genérico.
-
-## Probando los casos
+## Pruebas
 
 ```bash
-# 400 - validación de formato
-curl -X POST localhost:8080/api/products -H "Content-Type: application/json" \
-  -d '{"name":"","price":-5,"stock":-1}'
+# Error de validación
+curl -X POST localhost:8080/api/products \
+-H "Content-Type: application/json" \
+-d '{"name":"","price":-5,"stock":-1}'
+```
 
-# 409 - nombre duplicado
-curl -X POST localhost:8080/api/products -H "Content-Type: application/json" \
-  -d '{"name":"laptop","price":800,"stock":5}'
+```bash
+# Producto repetido
+curl -X POST localhost:8080/api/products \
+-H "Content-Type: application/json" \
+-d '{"name":"laptop","price":800,"stock":5}'
+```
 
-# 404 - producto eliminado o inexistente
+```bash
+# Producto no encontrado
 curl localhost:8080/api/products/999
 ```
 
-Las tres respuestas usan el mismo formato (`timestamp`, `status`, `error`, `message`,
-`path`, y `details` solo cuando aplica).
+---
 
-## Lo que entendí
+# Práctica 08 - Relaciones entre entidades
 
-Sin manejo centralizado, cada controller podría devolver errores con forma distinta, lo
-que vuelve la API difícil de consumir desde el frontend. Con `@RestControllerAdvice`, el
-servicio solo lanza la excepción que describe qué pasó (`NotFoundException`,
-`ConflictException`, etc.) y nunca construye una respuesta HTTP a mano; el handler global
-es el único lugar que decide cómo se ve un error. Esto separa claramente la lógica de
-negocio (el servicio) del transporte HTTP (el handler).
+## Objetivo
 
-# Práctica 08 - Relaciones entre entidades (ManyToOne)
+Relacionar **products**, **users** y **categories**.
 
-Hasta aquí `users` y `products` eran entidades independientes. En esta práctica agregué un
-módulo nuevo, `categories`, y relacioné `ProductEntity` con `UserEntity` (quién lo
-registró) y con `CategoryEntity` (a qué categoría pertenece).
+## Nuevo módulo
 
-```txt
-Muchos productos → un usuario (owner)
-Muchos productos → una categoría
-```
-
-## Módulo nuevo: categories
-
-Repliqué exactamente la misma estructura por capas que ya tenía `users`/`products`
-(entity, model, mapper, dtos, repository, service, controller):
-
-```
+```text
 categories/
-├── controllers/CategoryController.java
-├── dtos/CreateCategoryDto.java, UpdateCategoryDto.java, CategoryResponseDto.java
-├── entities/CategoryEntity.java       @Entity, name único + description
-├── models/CategoryModel.java
-├── mappers/CategoryMapper.java
-├── repositories/CategoryRepository.java
-└── services/CategoryService.java, CategoryServiceImpl.java
+├── controllers/
+├── dtos/
+├── entities/
+├── models/
+├── mappers/
+├── repositories/
+└── services/
 ```
 
-Mismos 5 endpoints que `users` (sin PATCH, no lo pedía la práctica):
-`GET /api/categories`, `GET /api/categories/{id}`, `POST /api/categories`,
-`PUT /api/categories/{id}`, `DELETE /api/categories/{id}`.
+### Endpoints
 
-## ProductEntity con relaciones @ManyToOne
+```text
+GET    /api/categories
+GET    /api/categories/{id}
+POST   /api/categories
+PUT    /api/categories/{id}
+DELETE /api/categories/{id}
+```
+
+## Relaciones
 
 ```java
 @ManyToOne(optional = false, fetch = FetchType.LAZY)
-@JoinColumn(name = "user_id", nullable = false)
+@JoinColumn(name = "user_id")
 private UserEntity owner;
 
 @ManyToOne(optional = false, fetch = FetchType.LAZY)
-@JoinColumn(name = "category_id", nullable = false)
+@JoinColumn(name = "category_id")
 private CategoryEntity category;
 ```
 
-`@ManyToOne` indica que muchos productos apuntan a un mismo usuario o categoría.
-`@JoinColumn` es la que crea la clave foránea (`user_id`, `category_id`) en la tabla
-`products`. Usé `fetch = FetchType.LAZY` porque no quiero traer el usuario y la categoría
-completos cada vez que Hibernate carga un producto; solo se consultan cuando el mapper
-accede a `entity.getOwner()` / `entity.getCategory()`.
+## DTO
 
-Con `ddl-auto: update`, Hibernate agregó las columnas y las foreign keys solo, pero como
-ya tenía productos de prueba sin `user_id`/`category_id`, tuve que borrar esas filas
-viejas primero (`NOT NULL` no se puede aplicar sobre filas existentes sin valor).
+Ahora el producto recibe los ids de usuario y categoría.
 
-## DTOs con IDs de las relaciones
+```text
+userId
+categoryId
+```
 
-`CreateProductDto` ahora pide `userId` y `categoryId` (`@NotNull`); `UpdateProductDto` y
-`PartialUpdateProductDto` piden `categoryId` (el `PUT` no permite cambiar el owner, solo
-la categoría). La entidad completa nunca se expone: los DTOs de entrada solo llevan el id,
-nunca el objeto relacionado.
-
-`ProductResponseDto` sí devuelve objetos anidados, reutilizando los DTOs de respuesta que
-ya existían (`UserResponseDto`, `CategoryResponseDto`) para no repetir campos ni exponer
-`passwordHash`:
+La respuesta devuelve la información relacionada.
 
 ```json
 {
   "id": 9,
   "name": "Laptop Gaming 08",
-  "price": 1200.0,
+  "price": 1200,
   "stock": 10,
-  "owner": { "id": 7, "name": "Juan Perez", "email": "juan.p08@ups.edu.ec" },
-  "category": { "id": 1, "name": "Electronicos", "description": "Dispositivos electronicos" },
-  "createdAt": "2026-07-01T09:52:15.419525",
-  "updatedAt": null
+  "owner": {
+    "id": 7,
+    "name": "Juan Perez"
+  },
+  "category": {
+    "id": 1,
+    "name": "Electronicos"
+  }
 }
 ```
 
-## ProductServiceImpl valida las relaciones antes de guardar
+## Validación
 
-En `create`, antes de armar el `ProductEntity` busco el usuario y la categoría por id; si
-no existen o están eliminados (`deleted = true`), lanzo `NotFoundException` (404) sin
-llegar a tocar `ProductRepository`:
+Antes de guardar un producto se verifica que el usuario y la categoría existan.
 
 ```java
 UserEntity owner = userRepository.findById(dto.getUserId())
         .orElseThrow(() -> new NotFoundException("User not found"));
-if (owner.isDeleted()) {
-    throw new NotFoundException("User not found");
-}
 
 CategoryEntity category = categoryRepository.findById(dto.getCategoryId())
         .orElseThrow(() -> new NotFoundException("Category not found"));
-if (category.isDeleted()) {
-    throw new NotFoundException("Category not found");
-}
 ```
 
-Recién ahí valido el nombre duplicado y guardo. En `update`/`partialUpdate` repetí la
-misma validación, pero solo para `categoryId` (el owner no cambia una vez creado el
-producto).
+## Consultas
 
-## Consultas relacionales
-
-Agregué a `ProductRepository` dos métodos derivados, usando el `_` para navegar la
-relación:
+Se agregaron estos métodos al repositorio.
 
 ```java
 List<ProductEntity> findByOwner_IdAndDeletedFalse(Long ownerId);
+
 List<ProductEntity> findByCategory_IdAndDeletedFalse(Long categoryId);
 ```
 
-Y dos endpoints nuevos en `ProductController`, cada uno validando primero que el usuario o
-la categoría existan:
+También se agregaron dos endpoints.
 
-```txt
+```text
 GET /api/products/user/{userId}
+
 GET /api/products/category/{categoryId}
 ```
 
-## Probando en PostgreSQL
+## Verificación
 
 ```bash
 docker exec -it postgres-dev psql -U ups -d devdb -c "\d products"
 ```
 
 ```sql
-SELECT p.id, p.name, p.user_id, u.name AS user_name, p.category_id, c.name AS category_name
+SELECT p.id,
+       p.name,
+       p.user_id,
+       u.name,
+       p.category_id,
+       c.name
 FROM products p
 INNER JOIN users u ON p.user_id = u.id
 INNER JOIN categories c ON p.category_id = c.id;
 ```
+# Práctica 09 - Filtros con query params
 
-## Lo que entendí
+## Objetivo
 
-`@ManyToOne` + `@JoinColumn` son las dos anotaciones que traducen una relación del modelo
-de dominio a una clave foránea real en la base de datos; el lado "muchos" (`ProductEntity`)
-es el que guarda la referencia. `FetchType.LAZY` evita que cada consulta de productos
-dispare automáticamente un `SELECT` a `users` y a `categories`: eso solo pasa cuando el
-mapper realmente necesita esos datos para armar la respuesta. La validación de que el
-usuario/categoría existan es responsabilidad del **servicio**, no de la base de datos ni
-del DTO: la foreign key evita datos huérfanos a nivel de PostgreSQL, pero sin la validación
-en `ProductServiceImpl` el error llegaría como un `500` feo de Hibernate en vez de un `404`
-claro. También entendí por qué el DTO de entrada solo lleva el id (`userId`, `categoryId`)
-y nunca la entidad completa: así el cliente no puede inventarse un usuario o modificarlo de
-paso al crear un producto, solo puede referenciarlo.
+Agregar filtros para consultar los productos de un usuario.
 
-# Práctica 09 (parte 1) - Filtros con query params
+## Endpoint
 
-Antes tenía `GET /api/products/user/{userId}` para ver los productos de un usuario, pero esa
-ruta no se siente natural: el usuario es lo principal acá, no el producto. Así que armé la
-versión "al revés": `GET /api/users/{id}/products`, y de paso le agregué filtros.
-
-## El endpoint nuevo
-
-```txt
+```text
 GET /api/users/1/products
 GET /api/users/1/products?name=laptop
 GET /api/users/1/products?minPrice=400&maxPrice=700
 ```
 
-Se puede filtrar por nombre (busca coincidencia parcial, no hace falta escribirlo exacto) y
-por un rango de precio. Los tres filtros son opcionales: si no mandas ninguno, te trae todos
-los productos del usuario.
+Los filtros son opcionales.
 
-## Cómo lo armé
-
-Un DTO nuevo (`ProductFilterDto`) recibe esos filtros directo desde la URL, sin que yo tenga
-que parsear nada a mano:
+## Controller
 
 ```java
 @GetMapping("/{id}/products")
@@ -585,107 +539,66 @@ public List<ProductResponseDto> findProductsByUser(
 }
 ```
 
-`@ModelAttribute` es como `@RequestBody`, pero para query params en vez de JSON.
-
-Puse toda la lógica en `UserService`/`UserServiceImpl` (no en `ProductService`), porque el
-usuario es el dueño del contexto: primero valida que el usuario exista, después valida que
-el rango de precio tenga sentido (`minPrice` no puede ser mayor que `maxPrice`), y recién
-ahí le pide los productos al `ProductRepository`.
-
-La consulta con los filtros la escribí a mano con `@Query`, porque Spring Data JPA no puede
-generar sola una consulta donde un filtro puede venir o no venir:
+## Consulta
 
 ```java
 @Query("""
-        SELECT p FROM ProductEntity p
-        WHERE p.deleted = false
-          AND p.owner.id = :userId
-          AND (COALESCE(:name, '') = '' OR LOWER(p.name) LIKE LOWER(CONCAT('%', COALESCE(:name, ''), '%')))
-          AND (:minPrice IS NULL OR p.price >= :minPrice)
-          AND (:maxPrice IS NULL OR p.price <= :maxPrice)
-        """)
+SELECT p FROM ProductEntity p
+WHERE p.deleted = false
+AND p.owner.id = :userId
+AND (COALESCE(:name,'') = '' OR LOWER(p.name)
+LIKE LOWER(CONCAT('%',COALESCE(:name,''),'%')))
+AND (:minPrice IS NULL OR p.price >= :minPrice)
+AND (:maxPrice IS NULL OR p.price <= :maxPrice)
+""")
 ```
 
-Cada condición dice "si no me mandaron este filtro, ignórala". El `LIKE` con `%...%` es lo
-que permite buscar "laptop" y que aparezca aunque el producto se llame "Laptop Gaming 08".
+---
 
-## Un bug con el que me topé
+# Práctica 10 - Paginación
 
-Al probarlo sin el filtro `name`, PostgreSQL tiraba un error rarísimo:
-`function lower(bytea) does not exist`. Pasaba porque cuando `name` llega en `null`,
-Postgres no logra adivinar qué tipo de dato es ese `null` dentro del `LOWER(...)`. Se
-arregla envolviéndolo en `COALESCE(:name, '')`, para que nunca le llegue un `null` puro a
-esa parte de la consulta.
+## Objetivo
 
-## Lo que entendí
+Agregar paginación usando **Page** y **Slice**.
 
-Hay dos tipos de validación bien distintos: la que revisa el **formato** de un solo campo
-(`@Size`, `@DecimalMin` en el DTO, se aplica sola con `@Valid`) y la que compara **dos
-campos entre sí** o necesita la base de datos (eso no lo puede hacer una anotación simple,
-así que va a mano en el **Service**, con un `if` y un `throw`). Por eso `minPrice <=
-maxPrice` se valida en `UserServiceImpl` y no en el DTO. También entendí que Bruno no
-"hace" el filtro: solo manda la URL con los query params, todo el trabajo real (recibirlos,
-validarlos, aplicarlos en el SQL) pasa en el backend.
+## Endpoints
 
-# Práctica 10 - Paginación (Page y Slice)
-
-Hasta ahora `GET /api/products` devolvía **todos** los productos de una sola vez. Con pocos
-registros no se nota, pero cargué ~20 000 productos de prueba y esa consulta empezó a tardar
-segundos y a devolver varios MB de JSON. La solución es **paginar**: que el cliente pida los
-datos de a pedazos.
-
-> Nota: desde la práctica 9 un producto tiene **varias** categorías (relación muchos a
-> muchos), por eso en las respuestas aparece `categories` como lista.
-
-## Endpoints nuevos
-
-Dejé el `GET /api/products` normal para comparar, y agregué dos versiones paginadas:
-
-```txt
-GET /api/products/page      -> con Page  (trae total de registros y de páginas)
-GET /api/products/slice     -> con Slice (más liviano, sin total)
+```text
+GET /api/products/page
+GET /api/products/slice
 ```
 
-Los dos aceptan los mismos parámetros por query:
+Parámetros disponibles:
 
-| Parámetro   | Qué hace                         | Por defecto |
-| ----------- | -------------------------------- | ----------- |
-| `page`      | Número de página (empieza en 0)  | `0`         |
-| `size`      | Cuántos registros por página     | `10`        |
-| `sortBy`    | Campo por el que ordenar         | `id`        |
-| `direction` | `asc` o `desc`                   | `asc`       |
+| Parámetro | Valor por defecto |
+|-----------|-------------------|
+| page | 0 |
+| size | 10 |
+| sortBy | id |
+| direction | asc |
 
 Ejemplos:
 
-```txt
+```text
 GET /api/products/page?page=0&size=5&sortBy=price&direction=desc
+
 GET /api/products/slice?page=0&size=5&sortBy=createdAt&direction=desc
 ```
 
-## Cómo lo armé
+## DTO
 
-**Un DTO reutilizable** (`core/dtos/PaginationDto.java`) recibe `page`, `size`, `sortBy` y
-`direction` desde la URL, con validaciones (`@Min`, `@Max`) para que no manden una página
-negativa o un tamaño gigante.
+Se creó:
 
-**Un helper compartido** (`core/pagination/PageableFactory.java`) arma el objeto `Pageable`
-de Spring y valida dos cosas a mano:
+```text
+core/dtos/PaginationDto.java
+```
 
-- que `sortBy` esté en una **lista blanca** (`id`, `name`, `price`, `stock`, `createdAt`,
-  `updatedAt`) — así nadie ordena por un campo que no existe o por una relación;
-- que `direction` sea `asc` o `desc`.
-
-Lo puse en `core` para no repetir esa lógica: la usan tanto la paginación de productos como
-la de productos por categoría.
-
-**El repositorio** (`ProductRepository`) tiene las consultas paginadas con `@Query`. La de
-`Page` lleva además un `countQuery` (la consulta que cuenta el total); la de `Slice` no lo
-necesita:
+## Repository
 
 ```java
 @Query(
-    value      = "SELECT p FROM ProductEntity p WHERE p.deleted = false",
-    countQuery = "SELECT COUNT(p) FROM ProductEntity p WHERE p.deleted = false"
+value = "SELECT p FROM ProductEntity p WHERE p.deleted = false",
+countQuery = "SELECT COUNT(p) FROM ProductEntity p WHERE p.deleted = false"
 )
 Page<ProductEntity> findActivePage(Pageable pageable);
 
@@ -693,32 +606,13 @@ Page<ProductEntity> findActivePage(Pageable pageable);
 Slice<ProductEntity> findActiveSlice(Pageable pageable);
 ```
 
-Spring Data traduce el `Pageable` a `LIMIT` / `OFFSET` / `ORDER BY` en el SQL, así que
-**la base de datos solo devuelve los registros de esa página**, no todos.
-
-## Carga masiva de datos
-
-Para poder probar la paginación con volumen creé `seed_data.sql`, que inserta 300 productos
-y los asocia a categorías. Se corre así:
+## Datos de prueba
 
 ```bash
 docker exec -i postgres-dev psql -U ups -d devdb < seed_data.sql
 ```
 
-## Diferencia entre Page y Slice
-
-| Aspecto                | Page                    | Slice                     |
-| ---------------------- | ----------------------- | ------------------------- |
-| Trae los datos         | Sí                      | Sí                        |
-| Trae `totalElements`   | Sí                      | No                        |
-| Trae `totalPages`      | Sí                      | No                        |
-| Ejecuta un `COUNT`     | Sí                      | No                        |
-| Para qué sirve         | Tablas con "Página X de N" | Scroll infinito / siguiente-anterior |
-
-### Respuesta con Page (evidencia)
-
-`GET /api/products/page?page=0&size=3&sortBy=price&direction=desc` — recortando el `content`,
-los metadatos son:
+## Resultado con Page
 
 ```json
 {
@@ -733,10 +627,7 @@ los metadatos son:
 
 ![Respuesta con Page](assets/10-page.png)
 
-### Respuesta con Slice (evidencia)
-
-`GET /api/products/slice?page=0&size=3&sortBy=createdAt&direction=desc` — mismos datos, pero
-**no** aparecen `totalElements` ni `totalPages` (por eso es más rápido, no ejecuta el COUNT):
+## Resultado con Slice
 
 ```json
 {
@@ -749,16 +640,13 @@ los metadatos son:
 
 ![Respuesta con Slice](assets/10-slice.png)
 
-### Error por paginación inválida (evidencia)
-
-`GET /api/products/page?page=-1&size=0` responde `400` con el detalle por campo:
+## Error de validación
 
 ```json
 {
   "status": 400,
   "error": "Bad Request",
   "message": "Datos de entrada inválidos",
-  "path": "/api/products/page",
   "details": {
     "page": "La página debe ser mayor o igual a 0",
     "size": "El tamaño debe ser mayor o igual a 1"
@@ -768,82 +656,62 @@ los metadatos son:
 
 ![Error de paginación](assets/10-page-invalid.png)
 
-## Actividad: categoría paginada
+## Categorías paginadas
 
-Apliqué lo mismo al endpoint de productos por categoría (que ya existía desde la práctica 9).
-Dejé el normal y agregué las dos versiones paginadas, **manteniendo los filtros**
-(`name`, `minPrice`, `maxPrice`, `userId`):
+Se agregaron estos endpoints.
 
-```txt
-GET /api/categories/{id}/products          (normal, ya existía)
-GET /api/categories/{id}/products/page     (nuevo, con Page)
-GET /api/categories/{id}/products/slice     (nuevo, con Slice)
+```text
+GET /api/categories/{id}/products
+
+GET /api/categories/{id}/products/page
+
+GET /api/categories/{id}/products/slice
 ```
 
-Ejemplo `GET /api/categories/1/products/page?name=seed&page=0&size=5&sortBy=price&direction=desc`:
+Ejemplo:
+
+```text
+GET /api/categories/1/products/page?name=seed&page=0&size=5&sortBy=price&direction=desc
+```
 
 ![Categoría paginada](assets/10-categoria-page.png)
 
-> Las capturas van en una carpeta `assets/` junto al README; reemplazá las imágenes por tus
-> pantallazos de Bruno. Los bloques JSON de arriba son las respuestas reales que obtuve al
-> probar.
-
-## Lo que entendí
-
-**¿Diferencia entre Page y Slice?** Los dos te dan una porción de los datos, pero `Page`
-además ejecuta una segunda consulta (`COUNT`) para decirte cuántos registros y cuántas
-páginas hay en total — sirve para mostrar "Página 3 de 50". `Slice` no hace ese `COUNT`:
-solo sabe si hay una página siguiente, así que es más liviano y se usa para scroll infinito.
-
-**¿Por qué paginar en el repositorio y no después?** Porque si traigo los 20 000 productos
-a memoria y recién ahí corto 10, ya pagué el costo caro: la base de datos leyó todo, viajó
-todo por la red y el backend lo cargó completo. Paginar en el repositorio hace que el
-`LIMIT`/`OFFSET` viaje hasta PostgreSQL y **solo se lean y devuelvan esos 10 registros**. La
-paginación tiene sentido únicamente si ocurre en la consulta SQL, no en Java.
+---
 
 # Práctica 11 - Autenticación con JWT
 
-Hasta acá cualquiera podía pegarle a cualquier endpoint sin identificarse. Con esta práctica
-agregué login real: te registrás o iniciás sesión, te dan un **JWT**, y ese token es lo que
-demuestra quién sos en cada request que hagas después.
+## Objetivo
 
-## Endpoints nuevos
+Agregar autenticación usando JWT.
 
-```txt
-POST /api/auth/register   -> crea el usuario (rol ROLE_USER por defecto) y devuelve un token
-POST /api/auth/login      -> valida credenciales y devuelve un token
+## Endpoints
+
+```text
+POST /api/auth/register
+
+POST /api/auth/login
 ```
 
-Los dos quedan públicos en `SecurityConfig` (`.requestMatchers("/auth/**").permitAll()`),
-porque sin login todavía no hay token que mandar.
+Después del login se debe enviar el token.
 
-## El resto queda cerrado
-
-Agregué `.anyRequest().authenticated()` en `SecurityConfig`, así que **todo lo demás** ahora
-exige mandar el token:
-
-```txt
+```text
 Authorization: Bearer <token>
 ```
 
-## Las piezas nuevas
+## Archivos
 
-- **`JwtUtil`**: genera y valida el token (firma HS256, expira a los 30 min).
-- **`JwtAuthenticationFilter`**: corre en cada request; si el token es válido, deja al usuario
-  autenticado en el `SecurityContext` antes de que la petición llegue al controller.
-- **`JwtAuthenticationEntryPoint`**: responde el 401 cuando falta el token o es inválido. No
-  puede ser un `@RestControllerAdvice` normal porque esto pasa *antes* de llegar a un
-  controller.
-- **`AuthService`**: hace el trabajo real. Valida credenciales con `AuthenticationManager`,
-  guarda la contraseña hasheada con BCrypt (nunca en texto plano) y genera el token con
-  `JwtUtil`.
+- JwtUtil
+- JwtAuthenticationFilter
+- JwtAuthenticationEntryPoint
+- AuthService
 
-## Probando
-
-Registro (devuelve el usuario creado y su token):
+## Registro
 
 ```http
 POST /api/auth/register
+```
+
+```json
 {
   "name": "Ana Torres",
   "email": "ana@example.com",
@@ -851,37 +719,36 @@ POST /api/auth/register
 }
 ```
 
-![Registro exitoso](assets/11-register.png)
+![Registro](assets/11-register.png)
 
-Login con esas mismas credenciales:
+## Login
 
-![Login exitoso](assets/11-login.png)
+![Login](assets/11-login.png)
 
-Pegarle a un endpoint protegido sin token responde 401:
+## Sin token
 
 ```json
 {
   "status": 401,
-  "message": "Token de autenticación inválido o no proporcionado..."
+  "message": "Token de autenticación inválido o no proporcionado"
 }
 ```
 
-![Sin token, 401](assets/11-sin-token.png)
+![401](assets/11-sin-token.png)
 
-Con el token del login/registro, el mismo endpoint responde 200 normalmente:
+## Con token
 
-![Con token, 200](assets/11-con-token.png)
+![200](assets/11-con-token.png)
+
+---
 
 # Práctica 12 - Roles y @PreAuthorize
 
-La práctica 11 resolvió "¿quién sos?". Esta resuelve "¿qué podés hacer?". No todo endpoint
-protegido debería estar abierto a cualquier usuario logueado: por ejemplo, ver **todos** los
-productos de **todos** los usuarios debería ser cosa de un ADMIN, no de cualquiera.
+## Objetivo
 
-## @PreAuthorize en los controllers
+Restringir algunos endpoints según el rol del usuario.
 
-`SecurityConfig` ya tenía `@EnableMethodSecurity(prePostEnabled = true)` desde la práctica 11
-(preparado a propósito), así que solo hizo falta anotar el método:
+## Ejemplo
 
 ```java
 @GetMapping
@@ -891,38 +758,31 @@ public List<ProductResponseDto> findAll() {
 }
 ```
 
-Hice lo mismo en `UserController.findAll()`. El resto de endpoints (paginados, por id, por
-usuario) se quedan solo con `.anyRequest().authenticated()`: cualquier usuario logueado puede
-usarlos, no hace falta ser ADMIN.
+También se aplicó en `UserController`.
 
-## El problema del 500 en vez de 403
+## Manejo del 403
 
-Sin manejarla, cuando `@PreAuthorize` rechaza a alguien Spring tira una excepción que cae en
-el handler genérico de `GlobalExceptionHandler` y responde **500** en vez de **403**. Le
-agregué dos manejadores nuevos:
+Se agregaron estos handlers.
 
 ```java
-@ExceptionHandler(AuthorizationDeniedException.class) // la lanza @PreAuthorize
-@ExceptionHandler(AccessDeniedException.class)         // para validaciones manuales (práctica 13)
+@ExceptionHandler(AuthorizationDeniedException.class)
+
+@ExceptionHandler(AccessDeniedException.class)
 ```
 
-## Cómo asignar ADMIN a un usuario
-
-No hay un endpoint para esto todavía (a propósito): se hace directo en la base, para que un
-usuario no pueda auto-promoverse:
+## Asignar rol ADMIN
 
 ```sql
 INSERT INTO user_roles (user_id, role_id)
-SELECT u.id, r.id FROM users u, roles r
-WHERE u.email = 'admin@example.com' AND r.name = 'ROLE_ADMIN';
+SELECT u.id, r.id
+FROM users u, roles r
+WHERE u.email = 'admin@example.com'
+AND r.name = 'ROLE_ADMIN';
 ```
 
-Después de correr eso hay que volver a hacer login: el rol viaja dentro del JWT, así que el
-token viejo se queda con los roles de antes.
+Después es necesario volver a iniciar sesión para generar un nuevo token.
 
-## Probando
-
-Con un usuario normal (ROLE_USER) pegándole a `GET /api/products`:
+## Usuario sin permisos
 
 ```json
 {
@@ -931,8 +791,11 @@ Con un usuario normal (ROLE_USER) pegándole a `GET /api/products`:
 }
 ```
 
-![403 para ROLE_USER](assets/12-forbidden-user.png)
+![403](assets/12-forbidden-user.png)
 
-Con un usuario ADMIN, el mismo endpoint responde 200 con la lista completa de productos:
+## Usuario ADMIN
 
-![200 para ROLE_ADMIN](assets/12-ok-admin.png)
+![200](assets/12-ok-admin.png)
+
+
+
