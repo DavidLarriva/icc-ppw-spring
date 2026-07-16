@@ -95,7 +95,20 @@ public class SecurityConfig {
                         // StatusController está mapeado como GET /api/status (práctica 1),
                         // así que con el context-path /api la ruta real es /api/status.
                         .requestMatchers("/api/status/**").permitAll()
-                        .requestMatchers("/actuator/**").permitAll()
+
+                        // Cuando un requestMatcher de más abajo (ej. hasRole en /actuator/**)
+                        // deniega el acceso, Spring hace un forward interno a /error para
+                        // renderizar la respuesta. Sin este permitAll, ese forward vuelve
+                        // a pasar por el filtro de seguridad y, como nuestro JwtAuthenticationFilter
+                        // no persiste el contexto en el SecurityContextRepository, /error
+                        // se ve como anónimo y devuelve 401 en vez del 403 real.
+                        .requestMatchers("/error").permitAll()
+
+                        // Health check público (lo consulta el HEALTHCHECK de Docker,
+                        // balanceadores de carga, etc.); el resto de Actuator
+                        // (metrics, info) expone detalles internos, así que solo ADMIN.
+                        .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/actuator/**").hasRole("ADMIN")
                        // .requestMatchers("/users/**").permitAll()
 
                         .anyRequest().authenticated()

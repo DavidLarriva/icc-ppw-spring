@@ -1,0 +1,24 @@
+# Ambiente de desarrollo local: Postgres en Docker (postgres-dev), datos de
+# prueba, logs detallados y ddl-auto en update para no tener que migrar a mano
+# cada vez que cambia una entidad.
+
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/devdb
+    username: ups
+    password: ups123
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+
+logging:
+  level:
+    ec.edu.ups.icc.fundamentos01: DEBUG
+
+jwt:
+  # Secret solo para dev: en producción es obligatorio (sin valor por defecto).
+  secret: ${JWT_SECRET:mySecretKeyForJWT2024MustBeAtLeast256BitsLongForHS256Algorithm}

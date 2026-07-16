@@ -797,5 +797,250 @@ Después es necesario volver a iniciar sesión para generar un nuevo token.
 
 ![200](assets/12-ok-admin.png)
 
+---
+
+# Práctica 13 - Ownership y validación de propiedad
+
+## Objetivo
+
+Que un usuario solo pueda editar o eliminar sus propios productos. Un ADMIN puede modificar cualquiera.
+
+## CreateProductDto
+
+Ya no recibe `userId`. El owner sale del token, no del body.
+
+## ProductService
+
+Los métodos que modifican datos ahora reciben al usuario autenticado.
+
+```java
+ProductResponseDto create(CreateProductDto dto, UserDetailsImpl currentUser);
+ProductResponseDto update(Long id, UpdateProductDto dto, UserDetailsImpl currentUser);
+void delete(Long id, UserDetailsImpl currentUser);
+```
+
+## validateOwnership
+
+```java
+private void validateOwnership(ProductEntity product, UserDetailsImpl currentUser) {
+    if (hasRole(currentUser, "ROLE_ADMIN")) {
+        return;
+    }
+
+    if (!product.getOwner().getId().equals(currentUser.getId())) {
+        throw new AccessDeniedException("No puedes modificar productos ajenos");
+    }
+}
+```
+
+Se llama antes de `update`, `partialUpdate` y `delete` en `ProductServiceImpl`.
+
+## GlobalExceptionHandler
+
+El handler de `AccessDeniedException` ahora usa el mensaje de la excepción en vez de uno fijo.
+
+```java
+@ExceptionHandler(AccessDeniedException.class)
+public ResponseEntity<ErrorResponse> handleAccessDeniedException(
+        AccessDeniedException ex,
+        HttpServletRequest request) {
+
+    String message = ex.getMessage() != null ? ex.getMessage() : "Acceso denegado";
+
+    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(new ErrorResponse(HttpStatus.FORBIDDEN, message, request.getRequestURI()));
+}
+```
+
+## Slice solo del dueño
+
+`GET /products/slice` sigue abierto a cualquier usuario logueado, pero ahora filtra por owner en el repositorio, no en Java: así la base de datos devuelve únicamente las filas de ese usuario en vez de traer todos los productos a memoria.
+
+```java
+@Query("""
+        SELECT p
+        FROM ProductEntity p
+        WHERE p.deleted = false
+          AND p.owner.id = :userId
+        """)
+Slice<ProductEntity> findActiveSliceByOwnerId(@Param("userId") Long userId, Pageable pageable);
+```
+
+## Crear producto sin userId
+
+```http
+POST /api/products
+```
+
+```json
+{
+  "name": "Laptop",
+  "price": 900,
+  "stock": 10,
+  "categoryIds": [1]
+}
+```
+
+El `owner` de la respuesta corresponde al usuario del token, no a nada enviado en el body.
+
+![Crear producto](assets/13-create-sin-userid.png)
+
+## Editar producto propio
+
+![200](assets/13-update-propio.png)
+
+## Editar producto ajeno
+
+```json
+{
+  "status": 403,
+  "message": "No puedes modificar productos ajenos"
+}
+```
+
+![403](assets/13-update-ajeno.png)
+
+## Eliminar producto ajeno
+
+![403](assets/13-delete-ajeno.png)
+
+## ADMIN editando producto ajeno
+
+![200](assets/13-admin-update.png)
+
+## Slice solo del dueño
+
+![Slice filtrado](assets/13-slice-propio.png)
+
+---
+
+# Práctica 14 - Despliegue en producción
+
+## Objetivo
+
+Preparar el proyecto para correr en un ambiente real: profiles separados por ambiente, Actuator para monitoreo, y una imagen Docker pensada para producción (no solo para desarrollo).
+
+## Profiles
+
+```
+src/main/resources/
+├── application.yml        ← Base (común a dev y prod)
+├── application-dev.yml    ← Desarrollo
+└── application-prod.yml   ← Producción
+```
+
+`application-prod.yml` no tiene ningún valor hardcodeado, todo sale de variables de entorno:
+
+```yaml
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+jwt:
+  secret: ${JWT_SECRET}
+```
+
+`ddl-auto: validate` en vez de `update`: en producción Hibernate solo verifica que las tablas coincidan con las entidades, nunca las modifica solo.
+
+Por defecto corre con `dev` (definido en `application.yml`). Para activar otro:
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=prod'
+```
+
+## Spring Boot Actuator
+
+```
+implementation 'org.springframework.boot:spring-boot-starter-actuator'
+```
+
+```yaml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+```
+
+## Proteger Actuator
+
+```java
+.requestMatchers("/actuator/health").permitAll()
+.requestMatchers("/actuator/**").hasRole("ADMIN")
+```
+
+Bug que encontré al probar esto: cuando `hasRole` deniega el acceso, Spring hace un forward interno a `/error` para armar la respuesta, y mi filtro JWT no persiste el contexto de login en un `SecurityContextRepository`, así que ese forward perdía la sesión y devolvía 401 en vez de 403. Se arregla dejando `/error` público (la decisión de seguridad real ya se tomó antes):
+
+```java
+.requestMatchers("/error").permitAll()
+```
+
+## Dockerfile de producción
+
+Cambios sobre el Dockerfile de la práctica de Docker:
+
+```dockerfile
+RUN addgroup -S spring && adduser -S spring -G spring
+USER spring:spring
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/actuator/health || exit 1
+
+ENV SPRING_PROFILES_ACTIVE=prod
+
+ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-Xms256m", "-Xmx512m", "-jar", "app.jar"]
+```
+
+- Usuario no-root: si alguien ejecuta código dentro del contenedor, no corre como root.
+- `HEALTHCHECK`: es lo que hace que `docker ps` muestre `(healthy)` en vez de solo `Up`.
+
+## docker-compose con profile prod
+
+```yaml
+environment:
+  SPRING_PROFILES_ACTIVE: prod
+  DATABASE_URL: jdbc:postgresql://db:5432/devdb
+  DB_USERNAME: ups
+  DB_PASSWORD: ups123
+  JWT_SECRET: ...
+```
+
+## Probando
+
+```bash
+docker compose up -d --build
+docker ps
+```
+
+![Contenedor healthy](assets/14-docker-ps-healthy.png)
+
+Health check público, sin token:
+
+```bash
+curl http://localhost:8080/api/actuator/health
+```
+
+![Health](assets/14-actuator-health.png)
+
+Metrics con un usuario normal (no ADMIN):
+
+```json
+{
+  "status": 403,
+  "error": "Forbidden",
+  "path": "/api/actuator/metrics"
+}
+```
+
+![403 metrics](assets/14-actuator-metrics-forbidden.png)
+
+Metrics con ADMIN:
+
+![200 metrics](assets/14-actuator-metrics-admin.png)
 
 

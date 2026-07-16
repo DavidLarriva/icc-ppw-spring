@@ -1,0 +1,12 @@
+.git
+.gradle
+build
+bin
+.idea
+.vscode
+*.iml
+.DS_Store
+assets
+bruno
+README.md
+HELP.md

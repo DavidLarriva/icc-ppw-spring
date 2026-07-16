@@ -1,0 +1,32 @@
+# Ambiente de producción: todo lo sensible viene de variables de entorno
+# (nunca hardcodeado), ddl-auto en validate (Hibernate solo verifica que el
+# schema coincida con las entidades, nunca lo modifica) y logs reducidos a
+# WARN/INFO para no llenar el disco ni exponer datos de más.
+
+server:
+  port: ${PORT:8080}
+  error:
+    include-stacktrace: never
+
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+
+logging:
+  level:
+    root: WARN
+    ec.edu.ups.icc.fundamentos01: INFO
+
+jwt:
+  # Sin valor por defecto a propósito: si falta JWT_SECRET, la app no arranca
+  # en vez de firmar tokens con un secreto conocido/público.
+  secret: ${JWT_SECRET}

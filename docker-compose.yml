@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16
+    container_name: fundamentos01-db
+    environment:
+      POSTGRES_USER: ups
+      POSTGRES_PASSWORD: ups123
+      POSTGRES_DB: devdb
+    volumes:
+      - fundamentos01-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ups -d devdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: fundamentos01-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Corre con application-prod.yml: ddl-auto validate, logs reducidos,
+      # todo lo sensible sale de acá y no de un archivo versionado en Git.
+      SPRING_PROFILES_ACTIVE: prod
+      DATABASE_URL: jdbc:postgresql://db:5432/devdb
+      DB_USERNAME: ups
+      DB_PASSWORD: ups123
+      JWT_SECRET: mySecretKeyForJWT2024MustBeAtLeast256BitsLongForHS256Algorithm
+    ports:
+      - "8080:8080"
+
+volumes:
+  fundamentos01-db-data:
