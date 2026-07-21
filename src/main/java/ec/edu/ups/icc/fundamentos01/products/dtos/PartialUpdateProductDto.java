@@ -2,6 +2,7 @@ package ec.edu.ups.icc.fundamentos01.products.dtos;
 
 import java.util.Set;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 
@@ -14,17 +15,34 @@ import jakarta.validation.constraints.Size;
  * Solo se validan los campos enviados.
  * No incluye id (se toma de la ruta).
  */
+@Schema(description = "Datos a actualizar de un producto (solo se aplican los campos enviados)")
 public class PartialUpdateProductDto {
 
+    @Schema(
+            description = "Nombre del producto",
+            example = "Laptop Lenovo ThinkPad"
+    )
     @Size(min = 3, max = 150, message = "El nombre debe tener entre 3 y 150 caracteres")
     private String name;
 
+    @Schema(
+            description = "Precio del producto",
+            example = "899.99"
+    )
     @Min(value = 0, message = "El precio debe ser mayor o igual a 0")
     private Double price;
 
+    @Schema(
+            description = "Cantidad disponible en inventario",
+            example = "10"
+    )
     @Min(value = 0, message = "El stock debe ser mayor o igual a 0")
     private Integer stock;
 
+    @Schema(
+            description = "Ids de las categorías a las que pertenece el producto",
+            example = "[1, 2]"
+    )
     private Set<Long> categoryIds;
 
     public PartialUpdateProductDto() {

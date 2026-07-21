@@ -30,6 +30,16 @@ management:
     health:
       show-details: when-authorized
 
+# Swagger UI / OpenAPI: rutas y orden de la documentación interactiva.
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+
 # ============== CONFIGURACIÓN DE JWT (común) ==============
 jwt:
   # Tiempo de expiración del access token (30 minutos)

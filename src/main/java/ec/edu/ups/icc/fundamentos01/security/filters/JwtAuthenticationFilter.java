@@ -58,7 +58,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             String jwt = getJwtFromRequest(request);
 
-            if (StringUtils.hasText(jwt) && jwtUtil.validateToken(jwt)) {
+            // validateAccessToken (no validateToken): un refresh token nunca
+            // debe servir como Bearer token para consumir endpoints protegidos.
+            if (StringUtils.hasText(jwt) && jwtUtil.validateAccessToken(jwt)) {
                 String email = jwtUtil.getEmailFromToken(jwt);
 
                 UserDetails userDetails = userDetailsService.loadUserByUsername(email);

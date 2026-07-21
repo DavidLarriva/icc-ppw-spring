@@ -26,7 +26,14 @@ import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.UpdateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.services.ProductService;
 import ec.edu.ups.icc.fundamentos01.security.services.UserDetailsImpl;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "productos", description = "gestión de productos con paginación, roles y ownership")
 @RestController
 @RequestMapping("/products")
 public class ProductController {
@@ -45,6 +52,11 @@ public class ProductController {
      * Solo ADMIN: expone todos los productos de todos los usuarios sin filtrar,
      * a diferencia de /page, /slice y /user/{userId} que sí puede usar cualquiera.
      */
+    @Operation(summary = "listar todos los productos (solo admin)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "lista completa de productos de todos los usuarios"),
+            @ApiResponse(responseCode = "403", description = "el usuario autenticado no tiene rol admin")
+    })
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     public List<ProductResponseDto> findAll() {
@@ -58,6 +70,11 @@ public class ProductController {
      * GET /api/products/page?page=0&size=5
      * GET /api/products/page?page=0&size=5&sortBy=price&direction=desc
      */
+    @Operation(summary = "listar productos paginados (page, con totales)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "página de productos con totalElements y totalPages"),
+            @ApiResponse(responseCode = "400", description = "parámetros de paginación inválidos")
+    })
     @GetMapping("/page")
     public Page<ProductResponseDto> findAllPage(@Valid @ModelAttribute PaginationDto pagination) {
         return productService.findAllPage(pagination);
@@ -73,6 +90,11 @@ public class ProductController {
      * GET /api/products/slice
      * GET /api/products/slice?page=0&size=5&sortBy=createdAt&direction=desc
      */
+    @Operation(summary = "listar mis productos paginados (slice, sin totales)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "página de productos propios del usuario autenticado"),
+            @ApiResponse(responseCode = "400", description = "parámetros de paginación inválidos")
+    })
     @GetMapping("/slice")
     public Slice<ProductResponseDto> findAllSlice(
             @Valid @ModelAttribute PaginationDto pagination,
@@ -81,6 +103,12 @@ public class ProductController {
         return productService.findAllSlice(pagination, currentUser);
     }
 
+    @Operation(summary = "obtener un producto por id")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "producto encontrado",
+                    content = @Content(schema = @Schema(implementation = ProductResponseDto.class))),
+            @ApiResponse(responseCode = "404", description = "producto no encontrado o eliminado")
+    })
     @GetMapping("/{id}")
     public ProductResponseDto findOne(@PathVariable Long id) {
         return productService.findOne(id);
@@ -91,6 +119,14 @@ public class ProductController {
      * mediante @AuthenticationPrincipal, así nadie puede crear productos
      * a nombre de otro usuario.
      */
+    @Operation(summary = "crear un producto (el dueño es el usuario autenticado)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "producto creado",
+                    content = @Content(schema = @Schema(implementation = ProductResponseDto.class))),
+            @ApiResponse(responseCode = "400", description = "datos de entrada inválidos"),
+            @ApiResponse(responseCode = "404", description = "una o más categorías no existen"),
+            @ApiResponse(responseCode = "409", description = "ya existe un producto activo con ese nombre")
+    })
     @PostMapping
     public ProductResponseDto create(
             @Valid @RequestBody CreateProductDto dto,
@@ -103,6 +139,14 @@ public class ProductController {
      * Ownership: solo el dueño del producto o un ROLE_ADMIN pueden actualizarlo.
      * La validación ocurre en el servicio (ver ProductServiceImpl.validateOwnership).
      */
+    @Operation(summary = "actualizar un producto completo (solo el dueño o un admin)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "producto actualizado",
+                    content = @Content(schema = @Schema(implementation = ProductResponseDto.class))),
+            @ApiResponse(responseCode = "400", description = "datos de entrada inválidos"),
+            @ApiResponse(responseCode = "403", description = "el producto no te pertenece"),
+            @ApiResponse(responseCode = "404", description = "producto o categoría no encontrados")
+    })
     @PutMapping("/{id}")
     public ProductResponseDto update(
             @PathVariable Long id,
@@ -112,6 +156,14 @@ public class ProductController {
         return productService.update(id, dto, currentUser);
     }
 
+    @Operation(summary = "actualizar un producto parcialmente (solo el dueño o un admin)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "producto actualizado",
+                    content = @Content(schema = @Schema(implementation = ProductResponseDto.class))),
+            @ApiResponse(responseCode = "400", description = "datos de entrada inválidos"),
+            @ApiResponse(responseCode = "403", description = "el producto no te pertenece"),
+            @ApiResponse(responseCode = "404", description = "producto o categoría no encontrados")
+    })
     @PatchMapping("/{id}")
     public ProductResponseDto partialUpdate(
             @PathVariable Long id,
@@ -121,6 +173,12 @@ public class ProductController {
         return productService.partialUpdate(id, dto, currentUser);
     }
 
+    @Operation(summary = "eliminar un producto (solo el dueño o un admin)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "producto eliminado (borrado lógico)"),
+            @ApiResponse(responseCode = "403", description = "el producto no te pertenece"),
+            @ApiResponse(responseCode = "404", description = "producto no encontrado")
+    })
     @DeleteMapping("/{id}")
     public void delete(
             @PathVariable Long id,
@@ -134,6 +192,11 @@ public class ProductController {
      *
      * GET /products/user/{userId}
      */
+    @Operation(summary = "listar los productos de un usuario")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "productos activos del usuario indicado"),
+            @ApiResponse(responseCode = "404", description = "usuario no encontrado")
+    })
     @GetMapping("/user/{userId}")
     public List<ProductResponseDto> findByUserId(@PathVariable Long userId) {
         return productService.findByUserId(userId);
@@ -144,6 +207,11 @@ public class ProductController {
      *
      * GET /products/category/{categoryId}
      */
+    @Operation(summary = "listar los productos de una categoría")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "productos activos de la categoría indicada"),
+            @ApiResponse(responseCode = "404", description = "categoría no encontrada")
+    })
     @GetMapping("/category/{categoryId}")
     public List<ProductResponseDto> findByCategoryId(@PathVariable Long categoryId) {
         return productService.findByCategoryId(categoryId);

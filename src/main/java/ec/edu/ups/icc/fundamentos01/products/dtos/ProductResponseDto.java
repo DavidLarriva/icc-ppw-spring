@@ -5,6 +5,7 @@ import java.util.List;
 
 import ec.edu.ups.icc.fundamentos01.categories.dtos.CategoryResponseDto;
 import ec.edu.ups.icc.fundamentos01.users.dtos.UserResponseDto;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /*
  * DTO utilizado para devolver al cliente los datos públicos
@@ -13,15 +14,31 @@ import ec.edu.ups.icc.fundamentos01.users.dtos.UserResponseDto;
  * Incluye los datos resumidos del usuario propietario (owner)
  * y de las categorías, como objetos anidados.
  */
+@Schema(description = "Datos públicos de un producto devueltos por la API")
 public class ProductResponseDto {
 
+    @Schema(description = "Id del producto", example = "1")
     private Long id;
+
+    @Schema(description = "Nombre del producto", example = "Laptop Lenovo ThinkPad")
     private String name;
+
+    @Schema(description = "Precio del producto", example = "899.99")
     private double price;
+
+    @Schema(description = "Cantidad disponible en inventario", example = "10")
     private int stock;
+
+    @Schema(description = "Usuario propietario del producto")
     private UserResponseDto owner;
+
+    @Schema(description = "Categorías a las que pertenece el producto")
     private List<CategoryResponseDto> categories;
+
+    @Schema(description = "Fecha y hora en que se creó el producto", example = "2026-07-16T10:30:00")
     private LocalDateTime createdAt;
+
+    @Schema(description = "Fecha y hora de la última actualización del producto", example = "2026-07-16T12:00:00")
     private LocalDateTime updatedAt;
 
     public ProductResponseDto() {

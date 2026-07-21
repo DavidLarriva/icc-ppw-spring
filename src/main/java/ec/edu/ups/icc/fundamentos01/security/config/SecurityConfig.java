@@ -96,6 +96,10 @@ public class SecurityConfig {
                         // así que con el context-path /api la ruta real es /api/status.
                         .requestMatchers("/api/status/**").permitAll()
 
+                        // Swagger UI / OpenAPI: documentación pública de la API, no expone
+                        // datos, solo la forma de los endpoints y DTOs.
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+
                         // Cuando un requestMatcher de más abajo (ej. hasRole en /actuator/**)
                         // deniega el acceso, Spring hace un forward interno a /error para
                         // renderizar la respuesta. Sin este permitAll, ese forward vuelve

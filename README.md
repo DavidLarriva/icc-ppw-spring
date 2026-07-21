@@ -904,9 +904,6 @@ El `owner` de la respuesta corresponde al usuario del token, no a nada enviado e
 
 ![403](assets/13-delete-ajeno.png)
 
-## ADMIN editando producto ajeno
-
-![200](assets/13-admin-update.png)
 
 ## Slice solo del dueño
 
@@ -1042,5 +1039,195 @@ Metrics con un usuario normal (no ADMIN):
 Metrics con ADMIN:
 
 ![200 metrics](assets/14-actuator-metrics-admin.png)
+
+---
+
+# Práctica 15 - Documentación con Swagger/OpenAPI
+
+## Objetivo
+
+Que la API se documente sola a partir del código: cada endpoint y cada DTO explicado, probable desde el navegador, sin depender de Bruno/Postman para saber qué manda o devuelve cada ruta.
+
+## Dependencia
+
+```groovy
+implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9'
+```
+
+## OpenApiConfig
+
+Registra el título/descripción de la API y el esquema `bearerAuth`, para que Swagger UI muestre el botón **Authorize** y mande el JWT en cada request de prueba:
+
+```java
+@Bean
+public OpenAPI customOpenAPI() {
+    SecurityScheme bearerScheme = new SecurityScheme()
+            .type(SecurityScheme.Type.HTTP)
+            .scheme("bearer")
+            .bearerFormat("JWT");
+
+    return new OpenAPI()
+            .info(new Info().title("API de programacion y plataformas web").version("1.0.0"))
+            .components(new Components().addSecuritySchemes("bearerAuth", bearerScheme))
+            .addSecurityItem(new SecurityRequirement().addList("bearerAuth"));
+}
+```
+
+## Abrir Swagger sin token
+
+`SecurityConfig` ya exige token en casi todo, así que Swagger también quedaba bloqueado. Se agregó:
+
+```java
+.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+```
+
+## Documentar endpoints
+
+En los controllers, `@Operation` para el resumen y `@ApiResponses` para los códigos posibles:
+
+```java
+@Operation(summary = "iniciar sesión")
+@ApiResponses({
+        @ApiResponse(responseCode = "200", description = "login correcto, devuelve access token y refresh token"),
+        @ApiResponse(responseCode = "401", description = "email o contraseña incorrectos")
+})
+@PostMapping("/login")
+```
+
+Se documentaron así los 4 endpoints de `AuthController` y los 10 de `ProductController`.
+
+## Documentar DTOs
+
+`@Schema` en la clase y en cada campo:
+
+```java
+@Schema(description = "Datos requeridos para iniciar sesión")
+public class LoginRequestDto {
+
+    @Schema(description = "Correo institucional o personal del usuario", example = "usera@ups.edu.ec")
+    private String email;
+}
+```
+
+Se aplicó a `LoginRequestDto`, `RegisterRequestDto`, `PaginationDto`, `CreateProductDto`, `UpdateProductDto`, `PartialUpdateProductDto` y `ProductResponseDto`.
+
+## ¿Por qué Swagger puede quedar público si los endpoints siguen protegidos?
+
+Porque son dos cosas distintas: `/swagger-ui/**` y `/v3/api-docs/**` solo devuelven la *descripción* de la API (qué endpoints existen, qué reciben, qué responden). No exponen datos reales ni saltan la seguridad — para efectivamente llamar a un endpoint protegido desde Swagger, igual hay que loguearse y usar el botón Authorize con un JWT válido, igual que con cualquier otro cliente HTTP.
+
+## Probando
+
+Swagger UI cargado, con los controllers agrupados por tag:
+
+![Swagger UI cargado](assets/15-swagger-ui.png)
+
+JSON de OpenAPI (`/api/v3/api-docs`):
+
+![JSON OpenAPI](assets/15-openapi-json.png)
+
+AuthController documentado:
+
+![AuthController documentado](assets/15-authcontroller-documentado.png)
+
+Botón Authorize con el esquema bearerAuth:
+
+![Botón Authorize](assets/15-authorize-button.png)
+
+Endpoint protegido sin token (401):
+
+![Sin token](assets/15-endpoint-sin-token.png)
+
+Mismo endpoint autorizado desde Swagger (200):
+
+![Con token](assets/15-endpoint-con-token.png)
+
+Endpoint solo-ADMIN con usuario normal (403):
+
+![403 admin](assets/15-admin-403.png)
+
+Mismo endpoint con usuario ADMIN (200):
+
+![200 admin](assets/15-admin-200.png)
+
+---
+
+# Extra - Refresh tokens
+
+> No es una práctica numerada del curso (la Práctica 16 real es despliegue en Ubuntu Server + Nginx, que no se ha hecho). Esto viene de un archivo del repo del inge mal numerado (`14_refresh_tokens.md`, aunque titulado "Práctica 16" por dentro). Se implementó como mejora extra sobre la Práctica 11 (JWT).
+
+## Objetivo
+
+Hasta acá, cuando el access token expiraba (30 min) tocaba volver a loguearse con email y contraseña. Ahora el login devuelve **dos** tokens: uno corto para consumir la API, y uno largo (7 días) que solo sirve para pedir un access token nuevo sin mandar la contraseña otra vez.
+
+## Diferenciar los tokens
+
+El riesgo de tener dos JWT es que alguien mande el refresh token como si fuera un access token. Para evitarlo, cada token lleva un claim `type`:
+
+```java
+private static final String ACCESS_TOKEN_TYPE = "access";
+private static final String REFRESH_TOKEN_TYPE = "refresh";
+```
+
+`JwtAuthenticationFilter` ahora valida `validateAccessToken(jwt)` en vez de `validateToken(jwt)` — si alguien manda un refresh token en el header `Authorization`, lo rechaza.
+
+## RefreshTokenEntity
+
+El refresh token también se guarda en base de datos (tabla `refresh_tokens`), no solo como JWT, para poder revocarlo antes de que expire:
+
+```java
+@Entity
+@Table(name = "refresh_tokens")
+public class RefreshTokenEntity extends BaseEntity {
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    private UserEntity user;
+
+    @Column(nullable = false, unique = true, length = 1000)
+    private String token;
+
+    @Column(nullable = false)
+    private LocalDateTime expiresAt;
+
+    @Column(nullable = false)
+    private boolean revoked = false;
+}
+```
+
+## Endpoints nuevos
+
+```txt
+POST /api/auth/refresh   -> valida el refresh token y devuelve un par nuevo (rotación)
+POST /api/auth/logout    -> revoca el refresh token recibido
+```
+
+Ambos son públicos: no se validan con access token, se validan con el propio refresh token dentro de `RefreshTokenService`.
+
+## Rotación
+
+Cada vez que se usa `/auth/refresh`, el refresh token usado se revoca y se entrega uno nuevo. Si alguien intenta reusar uno viejo (por ejemplo, uno robado), `RefreshTokenService.validateAndGetActiveToken()` lo rechaza porque ya quedó marcado `revoked = true`.
+
+En login también se revocan los refresh tokens anteriores del usuario, para dejar una sola sesión activa.
+
+## Probando
+
+Login (devuelve ambos tokens):
+
+![Login con refresh token](assets/extra-login.png)
+
+Intentar usar el refresh token como Bearer (rechazado):
+
+![Refresh token rechazado como Bearer](assets/extra-refresh-como-bearer.png)
+
+Refresh exitoso (tokens nuevos):
+
+![Refresh exitoso](assets/extra-refresh-ok.png)
+
+Reusar el refresh token ya rotado (rechazado):
+
+![Refresh token reusado](assets/extra-refresh-reusado.png)
+
+Logout y luego intentar refrescar con ese mismo token (rechazado):
+
+![Refresh después de logout](assets/extra-refresh-despues-logout.png)
 
 
