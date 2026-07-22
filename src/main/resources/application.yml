@@ -29,6 +29,13 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  health:
+    # Nadie usa Redis todavía (quedó como dependencia agregada de más en
+    # build.gradle), pero Actuator lo detecta en el classpath y lo incluye
+    # en el health check por defecto. Sin esto, /actuator/health marca DOWN
+    # aunque la app funcione perfecto.
+    redis:
+      enabled: false
 
 # Swagger UI / OpenAPI: rutas y orden de la documentación interactiva.
 springdoc:

@@ -1042,6 +1042,87 @@ Metrics con ADMIN:
 
 ---
 
+# Extra - Refresh tokens
+
+> No es una práctica numerada del curso (la Práctica 16 real es despliegue en Ubuntu Server + Nginx, ver más abajo). Esto viene de un archivo del repo del inge mal numerado (`14_refresh_tokens.md`, aunque titulado "Práctica 16" por dentro). Se implementó como mejora extra sobre la Práctica 11 (JWT).
+
+## Objetivo
+
+Hasta acá, cuando el access token expiraba (30 min) tocaba volver a loguearse con email y contraseña. Ahora el login devuelve **dos** tokens: uno corto para consumir la API, y uno largo (7 días) que solo sirve para pedir un access token nuevo sin mandar la contraseña otra vez.
+
+## Diferenciar los tokens
+
+El riesgo de tener dos JWT es que alguien mande el refresh token como si fuera un access token. Para evitarlo, cada token lleva un claim `type`:
+
+```java
+private static final String ACCESS_TOKEN_TYPE = "access";
+private static final String REFRESH_TOKEN_TYPE = "refresh";
+```
+
+`JwtAuthenticationFilter` ahora valida `validateAccessToken(jwt)` en vez de `validateToken(jwt)` — si alguien manda un refresh token en el header `Authorization`, lo rechaza.
+
+## RefreshTokenEntity
+
+El refresh token también se guarda en base de datos (tabla `refresh_tokens`), no solo como JWT, para poder revocarlo antes de que expire:
+
+```java
+@Entity
+@Table(name = "refresh_tokens")
+public class RefreshTokenEntity extends BaseEntity {
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    private UserEntity user;
+
+    @Column(nullable = false, unique = true, length = 1000)
+    private String token;
+
+    @Column(nullable = false)
+    private LocalDateTime expiresAt;
+
+    @Column(nullable = false)
+    private boolean revoked = false;
+}
+```
+
+## Endpoints nuevos
+
+```txt
+POST /api/auth/refresh   -> valida el refresh token y devuelve un par nuevo (rotación)
+POST /api/auth/logout    -> revoca el refresh token recibido
+```
+
+Ambos son públicos: no se validan con access token, se validan con el propio refresh token dentro de `RefreshTokenService`.
+
+## Rotación
+
+Cada vez que se usa `/auth/refresh`, el refresh token usado se revoca y se entrega uno nuevo. Si alguien intenta reusar uno viejo (por ejemplo, uno robado), `RefreshTokenService.validateAndGetActiveToken()` lo rechaza porque ya quedó marcado `revoked = true`.
+
+En login también se revocan los refresh tokens anteriores del usuario, para dejar una sola sesión activa.
+
+## Probando
+
+Login (devuelve ambos tokens):
+
+![Login con refresh token](assets/extra-login.png)
+
+Intentar usar el refresh token como Bearer (rechazado):
+
+![Refresh token rechazado como Bearer](assets/extra-refresh-como-bearer.png)
+
+Refresh exitoso (tokens nuevos):
+
+![Refresh exitoso](assets/extra-refresh-ok.png)
+
+Reusar el refresh token ya rotado (rechazado):
+
+![Refresh token reusado](assets/extra-refresh-reusado.png)
+
+Logout y luego intentar refrescar con ese mismo token (rechazado):
+
+![Refresh después de logout](assets/extra-refresh-despues-logout.png)
+
+---
+
 # Práctica 15 - Documentación con Swagger/OpenAPI
 
 ## Objetivo
@@ -1148,6 +1229,109 @@ Endpoint solo-ADMIN con usuario normal (403):
 Mismo endpoint con usuario ADMIN (200):
 
 ![200 admin](assets/15-admin-200.png)
+
+## Explicación 1: ¿diferencia entre Swagger UI y OpenAPI?
+
+OpenAPI es la especificación: un JSON (`/api/v3/api-docs`) que describe qué endpoints existen, qué reciben y qué devuelven. Swagger UI es solo una interfaz visual que lee ese JSON y lo muestra como una página navegable con botones para probar cada endpoint. Se podría generar el JSON de OpenAPI y consumirlo con otra herramienta (Postman, un generador de clientes) sin usar Swagger UI para nada — son cosas independientes.
+
+## Explicación 2: ¿por qué Swagger puede ser público pero los endpoints seguir protegidos?
+
+Porque son dos capas distintas. `/swagger-ui/**` y `/v3/api-docs/**` solo devuelven documentación (qué existe, qué forma tienen los DTOs), no ejecutan lógica de negocio ni tocan la base de datos. La seguridad real vive en `SecurityConfig` y se evalúa cuando alguien intenta *llamar* a un endpoint de verdad — para eso sigue haciendo falta loguearse y usar un JWT válido, igual que si se llamara desde Bruno o curl.
+
+## Explicación 3: ¿cómo se configura Swagger para enviar un JWT en Authorization: Bearer?
+
+Con `OpenApiConfig`: se registra un `SecurityScheme` tipo `http`/`bearer`/`JWT` llamado `bearerAuth`, y se agrega como `SecurityRequirement` global con `.addSecurityItem(...)`. Eso hace aparecer el botón **Authorize** en Swagger UI — al pegar el token ahí, Swagger arma automáticamente el header `Authorization: Bearer <token>` en cada request de prueba hecho desde la interfaz.
+
+---
+
+# Práctica 16 - Despliegue portable con Docker y Nginx
+
+## Objetivo
+
+Correr la misma imagen Docker sin Docker Compose: contenedores individuales con `docker run`, Nginx como reverse proxy publicado en el puerto 80, Spring Boot privado en la red interna, y Postgres como servicio "externo". Todo configurado por variables de entorno, nada de credenciales en la imagen.
+
+> Nota: la práctica original usa una VM de Ubuntu Server aparte (VirtualBox, red host-only). Con autorización del profe, se simuló la misma arquitectura con contenedores Docker en la misma máquina: Nginx hace el papel de "Ubuntu Server" (publicado en `:80`), y el host real hace de "máquina anfitriona".
+
+## Arquitectura
+
+```txt
+Mac (host)
+└── red Docker: app-network
+    ├── postgres-external   → Postgres "externo" (fallback documentado en la práctica)
+    ├── spring-app          → Spring Boot, privado, sin puerto publicado
+    └── nginx-proxy         → Nginx, publicado en :80 (hace de "Ubuntu Server")
+```
+
+## Comandos (sin Docker Compose)
+
+```bash
+docker network create app-network
+
+docker run -d --name postgres-external --network app-network \
+  -e POSTGRES_USER=ups -e POSTGRES_PASSWORD=ups123 -e POSTGRES_DB=devdb \
+  -v postgres-external-data:/var/lib/postgresql/data \
+  postgres:16
+
+docker build -t fundamentos01-app:ubuntu-sim .
+
+docker run -d --name spring-app --network app-network \
+  -e SPRING_PROFILES_ACTIVE=prod \
+  -e DATABASE_URL=jdbc:postgresql://postgres-external:5432/devdb \
+  -e DB_USERNAME=ups \
+  -e DB_PASSWORD=ups123 \
+  -e JWT_SECRET=mySecretKeyForJWT2024MustBeAtLeast256BitsLongForHS256Algorithm \
+  fundamentos01-app:ubuntu-sim
+
+docker run -d --name nginx-proxy --network app-network -p 80:80 \
+  -v "$(pwd)/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+  nginx:alpine
+```
+
+`spring-app` no publica ningún puerto al host — solo es alcanzable dentro de `app-network`, igual que en la práctica original donde Spring Boot queda privado y solo Nginx da la cara.
+
+## nginx.conf
+
+```nginx
+http {
+    resolver 127.0.0.11 valid=10s;
+
+    server {
+        listen 80;
+
+        location / {
+            set $backend "spring-app:8080";
+            proxy_pass http://$backend;
+            proxy_set_header Host $host;
+        }
+    }
+}
+```
+
+## Sobre el PostgreSQL "externo"
+
+La arquitectura original conecta a un Postgres que corre en la máquina anfitriona (fuera de Docker). Acá se usó la alternativa de contingencia que la propia práctica documenta: un contenedor de Postgres dedicado (`postgres-external`) en la misma red, referenciado por `DATABASE_URL` como cualquier servicio externo — la app no sabe ni le importa si el Postgres real está en un contenedor, en la HOST o en otro servidor.
+
+## Probando
+
+`docker ps` con los tres contenedores corriendo:
+
+![docker ps](assets/16-docker-ps.png)
+
+Health check "desde Ubuntu Server" (dentro de la red Docker, sin pasar por Nginx):
+
+![Health desde la red](assets/16-health-desde-red.png)
+
+Health check "desde la máquina anfitriona" (a través de Nginx, puerto 80):
+
+![Health desde el host](assets/16-health-desde-host.png)
+
+Login consumido desde la máquina anfitriona con Bruno, apuntando a `http://localhost/api/auth/login` (puerto 80, no 8080):
+
+![Login desde Bruno](assets/16-login-bruno.png)
+
+## Explicación: conexión a PostgreSQL externo
+
+La arquitectura original conecta a un Postgres que corre en la máquina anfitriona (fuera de Docker), fuera del alcance de esta simulación en una sola máquina. Se usó la alternativa de contingencia que la propia práctica documenta: un contenedor de Postgres dedicado (`postgres-external`) en la misma red Docker, referenciado por `DATABASE_URL` exactamente igual que un servicio externo real — la aplicación Spring Boot no sabe ni le importa si el Postgres está en un contenedor, en la máquina anfitriona o en otro servidor; solo usa la URL de conexión que le llega por variable de entorno.
 
 
 

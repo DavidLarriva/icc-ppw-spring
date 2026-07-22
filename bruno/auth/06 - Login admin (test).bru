@@ -1,11 +1,11 @@
 meta {
-  name: 02 - Login
+  name: 06 - Login admin (test)
   type: http
-  seq: 2
+  seq: 6
 }
 
 post {
-  url: http://localhost/api/auth/login
+  url: {{baseUrl}}/auth/login
   body: json
   auth: none
 }
@@ -16,8 +16,8 @@ headers {
 
 body:json {
   {
-    "email": "daniel@gmail.com",
-    "password": "Secreto1234"
+    "email": "test@test.com",
+    "password": "Test1234"
   }
 }
 
