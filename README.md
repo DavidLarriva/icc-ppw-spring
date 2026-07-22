@@ -1011,7 +1011,7 @@ environment:
   JWT_SECRET: ...
 ```
 
-## Probando
+## Capturas
 
 ```bash
 docker compose up -d --build
@@ -1043,6 +1043,26 @@ Metrics con un usuario normal (no ADMIN):
 Metrics con ADMIN:
 
 ![200 metrics](assets/14-actuator-metrics-admin.png)
+
+## Explicación 1: ¿Qué es Tomcat embebido?
+
+Tomcat es el servidor encargado de recibir las solicitudes HTTP y comunicarlas con Spring. Que sea **embebido** significa que viene incluido dentro de la aplicación, por lo que no es necesario instalar ni configurar un servidor externo.
+
+Gracias a `spring-boot-starter-web`, Tomcat se empaqueta junto con la aplicación. Entonces, al ejecutar `java -jar app.jar`, se inicia tanto el servidor como la aplicación al mismo tiempo, sin configuraciones adicionales.
+
+## Explicación 2: ¿Existe Nginx embebido en Spring Boot?
+
+No. Nginx es un servicio independiente y no viene incluido dentro de Spring Boot.
+
+Normalmente se coloca delante de la aplicación como un **reverse proxy**. Recibe las solicitudes en los puertos 80/443 y luego las envía hacia Tomcat en el puerto 8080.
+
+Se utiliza principalmente para manejar HTTPS, conectar varios servicios con un mismo dominio o distribuir tráfico. Estas funciones no las realiza directamente Tomcat.
+
+## Explicación 3: ¿Qué es Actuator?
+
+Actuator es un módulo de Spring Boot que agrega endpoints de monitoreo ya preparados, como `/actuator/health`, `/actuator/metrics` y `/actuator/info`.
+
+Permite revisar el estado de la aplicación, obtener métricas del sistema y ayudar a herramientas externas, como Docker o balanceadores de carga, a comprobar si el servicio está funcionando correctamente.
 
 ---
 
@@ -1105,7 +1125,7 @@ Si alguien intenta utilizar nuevamente un token antiguo, por ejemplo, uno que fu
 
 Además, durante el inicio de sesión se revocan los refresh tokens anteriores del usuario. Esto permite mantener una sola sesión activa y evita que existan varios tokens válidos al mismo tiempo.
 
-## Probando
+## Capturas
 
 Login (devuelve ambos tokens):
 
