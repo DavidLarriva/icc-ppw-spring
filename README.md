@@ -971,7 +971,11 @@ management:
 .requestMatchers("/actuator/**").hasRole("ADMIN")
 ```
 
-Bug que encontré al probar esto: cuando `hasRole` deniega el acceso, Spring hace un forward interno a `/error` para armar la respuesta, y mi filtro JWT no persiste el contexto de login en un `SecurityContextRepository`, así que ese forward perdía la sesión y devolvía 401 en vez de 403. Se arregla dejando `/error` público (la decisión de seguridad real ya se tomó antes):
+Durante las pruebas se encontró un problema: cuando `hasRole` bloqueaba el acceso, Spring hacía una redirección interna hacia `/error` para generar la respuesta.
+
+El problema era que el filtro JWT no guardaba el contexto de autenticación en un `SecurityContextRepository`, por lo que al entrar a `/error` se perdía la sesión y se devolvía un error **401** en lugar de **403**.
+
+La solución fue permitir el acceso público a `/error`, ya que la validación de seguridad ya se había realizado previamente. De esta forma, la respuesta puede generarse correctamente sin volver a perder la autenticación.
 
 ```java
 .requestMatchers("/error").permitAll()
@@ -1042,13 +1046,13 @@ Metrics con ADMIN:
 
 ---
 
-# Extra - Refresh tokens
-
-> No es una práctica numerada del curso (la Práctica 16 real es despliegue en Ubuntu Server + Nginx, ver más abajo). Esto viene de un archivo del repo del inge mal numerado (`14_refresh_tokens.md`, aunque titulado "Práctica 16" por dentro). Se implementó como mejora extra sobre la Práctica 11 (JWT).
+# Refresh tokens
 
 ## Objetivo
 
-Hasta acá, cuando el access token expiraba (30 min) tocaba volver a loguearse con email y contraseña. Ahora el login devuelve **dos** tokens: uno corto para consumir la API, y uno largo (7 días) que solo sirve para pedir un access token nuevo sin mandar la contraseña otra vez.
+Antes, cuando el access token expiraba después de 30 minutos, era necesario iniciar sesión nuevamente usando el correo y la contraseña.
+
+Ahora el login entrega dos tokens: un **access token** de corta duración para acceder a la API y un **refresh token** con una duración mayor (7 días). Este último permite obtener un nuevo access token sin tener que ingresar la contraseña nuevamente.
 
 ## Diferenciar los tokens
 
@@ -1095,9 +1099,11 @@ Ambos son públicos: no se validan con access token, se validan con el propio re
 
 ## Rotación
 
-Cada vez que se usa `/auth/refresh`, el refresh token usado se revoca y se entrega uno nuevo. Si alguien intenta reusar uno viejo (por ejemplo, uno robado), `RefreshTokenService.validateAndGetActiveToken()` lo rechaza porque ya quedó marcado `revoked = true`.
+Cada vez que se utiliza `/auth/refresh`, el refresh token usado se invalida y se genera uno nuevo.
 
-En login también se revocan los refresh tokens anteriores del usuario, para dejar una sola sesión activa.
+Si alguien intenta utilizar nuevamente un token antiguo, por ejemplo, uno que fue robado, `RefreshTokenService.validateAndGetActiveToken()` lo rechaza porque ya tiene el estado `revoked = true`.
+
+Además, durante el inicio de sesión se revocan los refresh tokens anteriores del usuario. Esto permite mantener una sola sesión activa y evita que existan varios tokens válidos al mismo tiempo.
 
 ## Probando
 
@@ -1120,6 +1126,24 @@ Reusar el refresh token ya rotado (rechazado):
 Logout y luego intentar refrescar con ese mismo token (rechazado):
 
 ![Refresh después de logout](assets/extra-refresh-despues-logout.png)
+
+## Explicación 1: ¿Cuál es la diferencia entre access token y refresh token?
+
+El **access token** tiene una duración corta (30 minutos en este caso) y se utiliza en cada petición a la API mediante el encabezado `Authorization: Bearer`.
+
+El **refresh token** tiene una duración más larga (7 días) y no permite acceder directamente a los endpoints de la aplicación. Su única función es solicitar un nuevo access token desde `/auth/refresh` sin tener que ingresar nuevamente la contraseña.
+
+## Explicación 2: ¿Por qué el refresh token no debe usarse en Authorization: Bearer?
+
+Porque el refresh token tiene una duración mayor y, si alguien lo obtiene, podría causar más daño. Un access token robado solo permitiría acceso durante 30 minutos, mientras que un refresh token podría mantenerse válido durante 7 días.
+
+Por esta razón, cada JWT tiene un campo `type` que indica si es un `access` o un `refresh`. El `JwtAuthenticationFilter` solo acepta tokens de tipo `access` en el encabezado `Authorization`. Si se envía un refresh token en ese lugar, la solicitud es rechazada con un error 401.
+
+## Explicación 3: ¿Qué significa rotar un refresh token?
+
+La rotación significa que cada vez que se usa un refresh token en `/auth/refresh`, este se invalida y se genera uno nuevo.
+
+De esta forma, un mismo refresh token no puede utilizarse varias veces. Si alguien roba un token y lo usa, el usuario original notará que su token dejó de funcionar porque ya fue revocado.
 
 ---
 
@@ -1194,9 +1218,11 @@ Se aplicó a `LoginRequestDto`, `RegisterRequestDto`, `PaginationDto`, `CreatePr
 
 ## ¿Por qué Swagger puede quedar público si los endpoints siguen protegidos?
 
-Porque son dos cosas distintas: `/swagger-ui/**` y `/v3/api-docs/**` solo devuelven la *descripción* de la API (qué endpoints existen, qué reciben, qué responden). No exponen datos reales ni saltan la seguridad — para efectivamente llamar a un endpoint protegido desde Swagger, igual hay que loguearse y usar el botón Authorize con un JWT válido, igual que con cualquier otro cliente HTTP.
+Porque son dos cosas diferentes. Las rutas `/swagger-ui/**` y `/v3/api-docs/**` solo muestran la documentación de la API, como los endpoints disponibles, los datos que reciben y las respuestas que devuelven.
 
-## Probando
+Estas rutas no permiten acceder a información real ni omiten la seguridad. Si se quiere usar un endpoint protegido desde Swagger, primero es necesario iniciar sesión y usar el botón **Authorize** con un JWT válido, igual que con cualquier otro cliente HTTP.
+
+## Capturas de pantalla
 
 Swagger UI cargado, con los controllers agrupados por tag:
 
@@ -1230,17 +1256,23 @@ Mismo endpoint con usuario ADMIN (200):
 
 ![200 admin](assets/15-admin-200.png)
 
-## Explicación 1: ¿diferencia entre Swagger UI y OpenAPI?
+## Explicación 1: ¿Cuál es la diferencia entre Swagger UI y OpenAPI?
 
-OpenAPI es la especificación: un JSON (`/api/v3/api-docs`) que describe qué endpoints existen, qué reciben y qué devuelven. Swagger UI es solo una interfaz visual que lee ese JSON y lo muestra como una página navegable con botones para probar cada endpoint. Se podría generar el JSON de OpenAPI y consumirlo con otra herramienta (Postman, un generador de clientes) sin usar Swagger UI para nada — son cosas independientes.
+OpenAPI es la especificación que describe la API en un archivo JSON (`/api/v3/api-docs`). Ahí se define qué endpoints existen, qué datos reciben y qué respuestas devuelven.
 
-## Explicación 2: ¿por qué Swagger puede ser público pero los endpoints seguir protegidos?
+Swagger UI es una interfaz gráfica que usa esa información para mostrar la documentación de forma más fácil de entender. Además, permite probar los endpoints directamente desde el navegador.
 
-Porque son dos capas distintas. `/swagger-ui/**` y `/v3/api-docs/**` solo devuelven documentación (qué existe, qué forma tienen los DTOs), no ejecutan lógica de negocio ni tocan la base de datos. La seguridad real vive en `SecurityConfig` y se evalúa cuando alguien intenta *llamar* a un endpoint de verdad — para eso sigue haciendo falta loguearse y usar un JWT válido, igual que si se llamara desde Bruno o curl.
+## Explicación 2: ¿Por qué Swagger puede ser público y los endpoints seguir protegidos?
 
-## Explicación 3: ¿cómo se configura Swagger para enviar un JWT en Authorization: Bearer?
+Porque la documentación y la seguridad son cosas diferentes. Las rutas `/swagger-ui/**` y `/v3/api-docs/**` solo muestran información sobre la API y no ejecutan ninguna acción en la aplicación.
 
-Con `OpenApiConfig`: se registra un `SecurityScheme` tipo `http`/`bearer`/`JWT` llamado `bearerAuth`, y se agrega como `SecurityRequirement` global con `.addSecurityItem(...)`. Eso hace aparecer el botón **Authorize** en Swagger UI — al pegar el token ahí, Swagger arma automáticamente el header `Authorization: Bearer <token>` en cada request de prueba hecho desde la interfaz.
+La protección de los endpoints se configura en `SecurityConfig`. Cuando alguien intenta usar un endpoint, el sistema verifica si tiene un JWT válido. Si no está autenticado, el acceso es rechazado.
+
+## Explicación 3: ¿Cómo se configura Swagger para enviar un JWT?
+
+En `OpenApiConfig` se crea un `SecurityScheme` de tipo `Bearer JWT` y se agrega como requisito de seguridad para la API.
+
+Con esta configuración aparece el botón **Authorize** en Swagger UI. Al ingresar un token, Swagger lo envía automáticamente en el encabezado `Authorization: Bearer <token>` en cada petición que se haga desde la interfaz.
 
 ---
 
@@ -1248,9 +1280,8 @@ Con `OpenApiConfig`: se registra un `SecurityScheme` tipo `http`/`bearer`/`JWT` 
 
 ## Objetivo
 
-Correr la misma imagen Docker sin Docker Compose: contenedores individuales con `docker run`, Nginx como reverse proxy publicado en el puerto 80, Spring Boot privado en la red interna, y Postgres como servicio "externo". Todo configurado por variables de entorno, nada de credenciales en la imagen.
+Ejecutar la misma imagen Docker sin usar Docker Compose. Se crean los contenedores con `docker run`, usando Nginx como *reverse proxy* en el puerto 80, Spring Boot en una red interna y Postgres como base de datos externa. Toda la configuración se realiza con variables de entorno, sin guardar credenciales dentro de la imagen.
 
-> Nota: la práctica original usa una VM de Ubuntu Server aparte (VirtualBox, red host-only). Con autorización del profe, se simuló la misma arquitectura con contenedores Docker en la misma máquina: Nginx hace el papel de "Ubuntu Server" (publicado en `:80`), y el host real hace de "máquina anfitriona".
 
 ## Arquitectura
 
@@ -1309,7 +1340,9 @@ http {
 
 ## Sobre el PostgreSQL "externo"
 
-La arquitectura original conecta a un Postgres que corre en la máquina anfitriona (fuera de Docker). Acá se usó la alternativa de contingencia que la propia práctica documenta: un contenedor de Postgres dedicado (`postgres-external`) en la misma red, referenciado por `DATABASE_URL` como cualquier servicio externo — la app no sabe ni le importa si el Postgres real está en un contenedor, en la HOST o en otro servidor.
+La arquitectura original se conecta a una base de datos Postgres que está en la máquina principal, fuera de Docker. En esta práctica se usó un contenedor de Postgres (postgres-external) dentro de la misma red de Docker y se configuró mediante DATABASE_URL, igual que cualquier base de datos externa.
+
+Para la aplicación no importa si Postgres está en un contenedor, en la máquina principal o en otro servidor; solo utiliza la dirección de conexión que se le proporciona.
 
 ## Probando
 
@@ -1331,8 +1364,9 @@ Login consumido desde la máquina anfitriona con Bruno, apuntando a `http://loca
 
 ## Explicación: conexión a PostgreSQL externo
 
-La arquitectura original conecta a un Postgres que corre en la máquina anfitriona (fuera de Docker), fuera del alcance de esta simulación en una sola máquina. Se usó la alternativa de contingencia que la propia práctica documenta: un contenedor de Postgres dedicado (`postgres-external`) en la misma red Docker, referenciado por `DATABASE_URL` exactamente igual que un servicio externo real — la aplicación Spring Boot no sabe ni le importa si el Postgres está en un contenedor, en la máquina anfitriona o en otro servidor; solo usa la URL de conexión que le llega por variable de entorno.
+La arquitectura original se conecta a una base de datos Postgres que está fuera de Docker, en la máquina principal. Como en esta práctica todo se hizo en una sola máquina, se utilizó un contenedor de Postgres (postgres-external) dentro de la misma red de Docker.
 
+La aplicación Spring Boot se conecta usando la variable DATABASE_URL, igual que lo haría con una base de datos externa. Para la aplicación no hay diferencia si Postgres está en un contenedor, en la máquina principal o en otro servidor; solo necesita la dirección de conexión.
 
 
 

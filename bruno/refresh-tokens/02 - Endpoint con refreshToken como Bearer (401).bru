@@ -1,0 +1,15 @@
+meta {
+  name: 02 - Endpoint con refreshToken como Bearer (401)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/products/page
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{refreshToken}}
+}

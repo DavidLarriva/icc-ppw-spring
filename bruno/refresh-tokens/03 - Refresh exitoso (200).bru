@@ -1,0 +1,32 @@
+meta {
+  name: 03 - Refresh exitoso (200)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/auth/refresh
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "refreshToken": "{{oldRefreshToken}}"
+  }
+}
+
+script:post-response {
+  // Guarda el par NUEVO. oldRefreshToken se queda congelado con el primero,
+  // a propósito, para poder reusarlo en el siguiente request y que falle.
+  if (res.body && res.body.token) {
+    bru.setEnvVar("authToken", res.body.token);
+  }
+  if (res.body && res.body.refreshToken) {
+    bru.setEnvVar("refreshToken", res.body.refreshToken);
+  }
+}
